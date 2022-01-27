@@ -1,0 +1,8 @@
+mcuboot_primary_1:
+  address: 0x7e000 #0x0
+  size: 0x1000 #0x40000
+  region: flash_primary
+mcuboot_secondary_1:
+  address: 0x7f000
+  size: 0x1000
+  region: flash_primary
