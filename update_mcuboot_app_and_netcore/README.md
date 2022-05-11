@@ -71,9 +71,9 @@ mcumgr -c acm0 image list
 ```
 :exclamation: NOTE: The dev argument may be different for you. For example in Windows it may be COM20 
 
-Copy the hash of the newly uploaded image, and use it to confirm it, making the new image run at next reboot, such as:
+4. Copy the hash of the newly uploaded image, and use it to confirm it, making the new image run at next reboot, such as:
 ```
 mcumgr -c acm0 image confirm 2348de4f84cb19c1c2721662ad1275da5c21eca749da9b32db20d2c9dffb47c0
 ```
 
-Then reboot the Developement Kit. MCUboot will now see that there is a network core image in the secondary slot, and then transfer it to the network core.
+5. Then reboot the Developement Kit. MCUboot will now see that there is a network core image in the secondary slot, and then transfer it to the network core.
