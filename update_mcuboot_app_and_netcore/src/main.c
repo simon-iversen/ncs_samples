@@ -6,8 +6,11 @@
 
 #include <zephyr.h>
 #include <sys/printk.h>
+#include "img_mgmt/img_mgmt.h"
 
 void main(void)
 {
-	printk("Hello World! %s\n", CONFIG_BOARD);
+	img_mgmt_register_group();
+	printk("Test 2\n");
+	printk("Application for Updating net core and app core (application and mcuboot)! \n");
 }
