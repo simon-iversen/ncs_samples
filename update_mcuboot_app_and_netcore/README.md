@@ -13,7 +13,7 @@ Probe configured successfully.
 J-Link>exit
 ```
 
-This patch should be applied to _< ncs location >/bootloader/mcuboot/_
+This patch should be applied to _< ncs location >/bootloader/mcuboot/_ in order to be able to update the network core while NSIB is enabled
 ```diff
 diff --git a/boot/bootutil/src/loader.c b/boot/bootutil/src/loader.c
 index d5c370c4..7b2d823b 100644
