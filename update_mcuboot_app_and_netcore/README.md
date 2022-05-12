@@ -3,7 +3,7 @@
 ## Requirements
 This sample is tested with an nRF5340DK v0.11.0 and NCS v1.9.0
 
-## Preparation of the Developement Kit
+## Preparations
 
 Disable the Mass Storage feature on the device, so that it does not interfere:
 ```
@@ -12,6 +12,31 @@ J-Link>MSDDisable
 Probe configured successfully.
 J-Link>exit
 ```
+
+This patch should be applied to _< ncs location >/bootloader/mcuboot/_
+```diff
+diff --git a/boot/bootutil/src/loader.c b/boot/bootutil/src/loader.c
+index d5c370c4..7b2d823b 100644
+--- a/boot/bootutil/src/loader.c
++++ b/boot/bootutil/src/loader.c
+@@ -926,6 +926,7 @@ boot_validated_swap_type(struct boot_loader_state *state,
+         vtable = (uint32_t *)(vtable_addr);
+         reset_addr = vtable[1];
+ #ifdef PM_S1_ADDRESS
++        if(reset_addr < PM_CPUNET_B0N_ADDRESS){ 
+         const struct flash_area *primary_fa;
+         int rc = flash_area_open(flash_area_id_from_multi_image_slot(
+                     BOOT_CURR_IMG(state),
+@@ -942,6 +943,7 @@ boot_validated_swap_type(struct boot_loader_state *state,
+             */
+             return BOOT_SWAP_TYPE_NONE;
+         }
++        }
+ #endif /* PM_S1_ADDRESS */
+     }
+ #endif /* PM_S1_ADDRESS || CONFIG_SOC_NRF5340_CPUAPP */
+ ```
+
 
 ## Update the main application
 1. Build and flash the program
