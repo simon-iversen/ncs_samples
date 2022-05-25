@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-&uart1 {
+&uart0 {
 	current-speed = <115200>;
 	compatible = "nordic,nrf-uarte";
 	status = "okay";
