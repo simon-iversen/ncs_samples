@@ -11,11 +11,8 @@
  * Header file for UART cases
  */
 
-#ifndef __TEST_UART_H__
-#define __TEST_UART_H__
 
 #include <drivers/uart.h>
-#include <ztest.h>
 
 /* RX and TX pins have to be connected together*/
 
@@ -27,8 +24,6 @@
 
 void init_uart(void);
 
-void single_read(void);
-void single_read_setup(void);
 
+void double_buffer_setup_and_read(void);
 
-#endif /* __TEST_UART_H__ */

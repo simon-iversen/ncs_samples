@@ -12,10 +12,15 @@
  */
 
 #include "test_uart.h"
+#include <stdio.h>
 
 void test_main(void)
 {
 	init_uart();
-	single_read_setup();
-	single_read();
+
+#ifdef CONFIG_USERSPACE
+	set_permissions();
+#endif
+	printk("uart async api sample started\n");
+	double_buffer_setup_and_read();
 }
