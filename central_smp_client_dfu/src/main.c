@@ -43,7 +43,7 @@
 #define SMP_ECHO_MAP_VALUE_MAX_LEN 30
 
 #define KEY_ECHO_MASK  DK_BTN1_MSK
-
+#define KEY_RESET_MASK  DK_BTN2_MSK
 
 static struct bt_conn *default_conn;
 static struct bt_dfu_smp dfu_smp;
@@ -261,6 +261,16 @@ static const struct bt_dfu_smp_init_params init_params = {
 	.error_cb = dfu_smp_on_error
 };
 
+static void smp_reset_rsp_proc(struct bt_dfu_smp *dfu_smp)
+{
+	printk("RESET RESPONSE CB. Doing nothing\n");
+}
+
+static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
+{
+	printk("LIST RESPONSE CB. Doing nothing\n");
+}
+
 static void smp_echo_rsp_proc(struct bt_dfu_smp *dfu_smp)
 {
 	uint8_t *p_outdata = (uint8_t *)(&smp_rsp_buff);
@@ -359,6 +369,86 @@ static void smp_echo_rsp_proc(struct bt_dfu_smp *dfu_smp)
 
 }
 
+static int send_smp_list(struct bt_dfu_smp *dfu_smp,
+			 const char *string)
+{
+	static struct smp_buffer smp_cmd;
+	zcbor_state_t zse[CBOR_ENCODER_STATE_NUM];
+	size_t payload_len;
+
+	zcbor_new_encode_state(zse, ARRAY_SIZE(zse), smp_cmd.payload,
+			       sizeof(smp_cmd.payload), 0);
+
+	/* Stop encoding on the error. */
+	zse->constant_state->stop_on_error = true;
+
+	zcbor_map_start_encode(zse, CBOR_MAP_MAX_ELEMENT_CNT);
+	zcbor_tstr_put_lit(zse, "d");
+	zcbor_tstr_put_term(zse, string);
+	zcbor_map_end_encode(zse, CBOR_MAP_MAX_ELEMENT_CNT);
+
+	if (!zcbor_check_error(zse)) {
+		printk("Failed to encode SMP echo packet, err: %d\n", zcbor_pop_error(zse));
+		return -EFAULT;
+	}
+
+	payload_len = (size_t)(zse->payload - smp_cmd.payload);
+
+	smp_cmd.header.op = 2; /* Write */
+	smp_cmd.header.flags = 0;
+	smp_cmd.header.len_h8 = 0;//(uint8_t)((payload_len >> 8) & 0xFF);
+	smp_cmd.header.len_l8 = 0;//(uint8_t)((payload_len >> 0) & 0xFF);
+	smp_cmd.header.group_h8 = 0;
+	smp_cmd.header.group_l8 = 1; /* IMAGE */
+	smp_cmd.header.seq = 0;
+	smp_cmd.header.id  = 0; /* LIST */
+	
+	return bt_dfu_smp_command(dfu_smp, smp_list_rsp_proc,
+				  sizeof(smp_cmd.header) + payload_len,
+				  &smp_cmd);
+}
+
+
+static int send_smp_reset(struct bt_dfu_smp *dfu_smp,
+			 const char *string)
+{
+	static struct smp_buffer smp_cmd;
+	zcbor_state_t zse[CBOR_ENCODER_STATE_NUM];
+	size_t payload_len;
+
+	zcbor_new_encode_state(zse, ARRAY_SIZE(zse), smp_cmd.payload,
+			       sizeof(smp_cmd.payload), 0);
+
+	/* Stop encoding on the error. */
+	zse->constant_state->stop_on_error = true;
+
+	zcbor_map_start_encode(zse, CBOR_MAP_MAX_ELEMENT_CNT);
+	zcbor_tstr_put_lit(zse, "d");
+	zcbor_tstr_put_term(zse, string);
+	zcbor_map_end_encode(zse, CBOR_MAP_MAX_ELEMENT_CNT);
+
+	if (!zcbor_check_error(zse)) {
+		printk("Failed to encode SMP echo packet, err: %d\n", zcbor_pop_error(zse));
+		return -EFAULT;
+	}
+
+	payload_len = (size_t)(zse->payload - smp_cmd.payload);
+
+	smp_cmd.header.op = 2; /* Write */
+	smp_cmd.header.flags = 0;
+	smp_cmd.header.len_h8 = 0;//(uint8_t)((payload_len >> 8) & 0xFF);
+	smp_cmd.header.len_l8 = 0;//(uint8_t)((payload_len >> 0) & 0xFF);
+	smp_cmd.header.group_h8 = 0;
+	smp_cmd.header.group_l8 = 0; /* OS */
+	smp_cmd.header.seq = 0;
+	smp_cmd.header.id  = 5; /* RESET */
+
+	return bt_dfu_smp_command(dfu_smp, smp_reset_rsp_proc,
+				  sizeof(smp_cmd.header) + payload_len,
+				  &smp_cmd);
+}
+
+
 static int send_smp_echo(struct bt_dfu_smp *dfu_smp,
 			 const char *string)
 {
@@ -398,6 +488,24 @@ static int send_smp_echo(struct bt_dfu_smp *dfu_smp,
 				  &smp_cmd);
 }
 
+static void button_reset(bool state)
+{
+	printk("Reset command\n");
+	if (state) {
+		static unsigned int reset_cnt;
+		char buffer[32];
+		int ret;
+
+		++reset_cnt;
+		printk("Reset test: %d\n", reset_cnt);
+		snprintk(buffer, sizeof(buffer), "Reset message: %u", reset_cnt);
+		ret = send_smp_reset(&dfu_smp, buffer);
+		if (ret) {
+			printk("Reset command send error (err: %d)\n", ret);
+		}
+	}
+}
+
 
 static void button_echo(bool state)
 {
@@ -421,6 +529,9 @@ static void button_handler(uint32_t button_state, uint32_t has_changed)
 {
 	if (has_changed & KEY_ECHO_MASK) {
 		button_echo(button_state & KEY_ECHO_MASK);
+	}
+	if(has_changed & KEY_RESET_MASK){
+		button_reset(button_state & KEY_RESET_MASK);
 	}
 }
 
