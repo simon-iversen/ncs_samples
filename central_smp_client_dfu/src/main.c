@@ -269,6 +269,29 @@ static void smp_reset_rsp_proc(struct bt_dfu_smp *dfu_smp)
 static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 {
 	printk("LIST RESPONSE CB. Doing nothing\n");
+	/*uint8_t *p_outdata = (uint8_t *)(&smp_rsp_buff);
+	const struct bt_dfu_smp_rsp_state *rsp_state;
+
+	rsp_state = bt_dfu_smp_rsp_state(dfu_smp);
+	printk("Echo response part received, size: %zu.\n",
+	       rsp_state->chunk_size);
+
+	if (bt_dfu_smp_rsp_total_check(dfu_smp)) {
+		zcbor_state_t zsd[CBOR_DECODER_STATE_NUM];
+		size_t payload_len = ((uint16_t)smp_rsp_buff.header.len_h8) << 8 |
+				      smp_rsp_buff.header.len_l8;
+		zcbor_new_decode_state(zsd, ARRAY_SIZE(zsd), smp_rsp_buff.payload, payload_len, 1);
+		uint8_t length_payload = zsd->payload_end - zsd->payload;
+		uint8_t payl_offs = 0;
+		printk("Start addr of payload: 0x%x\n", zsd->payload);
+		printk("end addr of payload: 0x%x\n", zsd->payload_end);
+		printk("Received bytes: 0x");
+		while(payl_offs <length_payload){
+			printk("%x", zsd->payload[payl_offs]);
+			payl_offs++;
+		}
+		printk("\n");
+	}*/
 }
 
 static void smp_echo_rsp_proc(struct bt_dfu_smp *dfu_smp)
@@ -322,7 +345,18 @@ static void smp_echo_rsp_proc(struct bt_dfu_smp *dfu_smp)
 		zsd->constant_state->stop_on_error = true;
 
 		zcbor_map_start_decode(zsd);
+		
 		ok = zcbor_tstr_decode(zsd, &value);
+		printk("Start addr of payload: 0x%x\n", zsd->payload);
+		printk("end addr of payload: 0x%x\n", zsd->payload_end);
+		uint8_t length_payload = zsd->payload_end - zsd->payload;
+		uint8_t payl_offs = 0;
+		printk("Received bytes: 0x");
+		while(payl_offs <length_payload){
+			printk("%x", zsd->payload[payl_offs]);
+			payl_offs++;
+		}
+		printk("\n");
 
 		if (!ok) {
 			printk("Decoding error (err: %d)\n", zcbor_pop_error(zsd));
@@ -394,7 +428,7 @@ static int send_smp_list(struct bt_dfu_smp *dfu_smp,
 
 	payload_len = (size_t)(zse->payload - smp_cmd.payload);
 
-	smp_cmd.header.op = 2; /* Write */
+	smp_cmd.header.op = 0; /* read request */
 	smp_cmd.header.flags = 0;
 	smp_cmd.header.len_h8 = 0;//(uint8_t)((payload_len >> 8) & 0xFF);
 	smp_cmd.header.len_l8 = 0;//(uint8_t)((payload_len >> 0) & 0xFF);
@@ -490,8 +524,9 @@ static int send_smp_echo(struct bt_dfu_smp *dfu_smp,
 
 static void button_reset(bool state)
 {
-	printk("Reset command\n");
+	
 	if (state) {
+		printk("Reset command\n");
 		static unsigned int reset_cnt;
 		char buffer[32];
 		int ret;
@@ -499,7 +534,8 @@ static void button_reset(bool state)
 		++reset_cnt;
 		printk("Reset test: %d\n", reset_cnt);
 		snprintk(buffer, sizeof(buffer), "Reset message: %u", reset_cnt);
-		ret = send_smp_reset(&dfu_smp, buffer);
+		//ret = send_smp_reset(&dfu_smp, buffer);
+		ret = send_smp_list(&dfu_smp, buffer);
 		if (ret) {
 			printk("Reset command send error (err: %d)\n", ret);
 		}
