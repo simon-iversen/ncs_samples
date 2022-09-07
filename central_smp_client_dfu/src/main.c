@@ -266,6 +266,11 @@ static void smp_reset_rsp_proc(struct bt_dfu_smp *dfu_smp)
 	printk("RESET RESPONSE CB. Doing nothing\n");
 }
 
+static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
+{
+	printk("UPLOAD RESPONSE CB. Doing nothing\n");
+}
+
 static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 {
 	printk("LIST RESPONSE CB. Doing nothing\n");
@@ -403,6 +408,55 @@ static void smp_echo_rsp_proc(struct bt_dfu_smp *dfu_smp)
 
 }
 
+static int send_upload(struct bt_dfu_smp *dfu_smp)
+{
+	zcbor_state_t zse[2];
+	size_t payload_len;
+	static struct smp_buffer smp_cmd;
+
+	zcbor_new_encode_state(zse, ARRAY_SIZE(zse), smp_cmd.payload,
+			       sizeof(smp_cmd.payload), 0);
+
+	/* Stop encoding on the error. */
+	zse->constant_state->stop_on_error = true;
+	printk("Change\n");
+	zcbor_map_start_encode(zse, 20);
+	zcbor_tstr_put_lit(zse, "image");
+	zcbor_int64_put(zse, 5);
+	zcbor_tstr_put_lit(zse, "len");
+	zcbor_uint32_put(zse, 100);
+	zcbor_tstr_put_lit(zse, "off");
+	zcbor_uint32_put(zse, 0);
+	zcbor_tstr_put_lit(zse, "sha");
+	zcbor_tstr_put_lit(zse, "12345");
+	zcbor_tstr_put_lit(zse, "data");
+	zcbor_tstr_put_lit(zse, "abc");
+	zcbor_tstr_put_lit(zse, "upgrade");
+	zcbor_bool_put(zse, false);
+	zcbor_map_end_encode(zse, 20);
+
+	if (!zcbor_check_error(zse)) {
+		printk("Failed to encode SMP test packet, err: %d\n", zcbor_pop_error(zse));
+	}else{
+		printk("Successfully encoded SMP test packet");
+	}
+
+	payload_len = (size_t)(zse->payload - smp_cmd.payload);
+
+	smp_cmd.header.op = 2; /* write request */
+	smp_cmd.header.flags = 0;
+	smp_cmd.header.len_h8 = (uint8_t)((payload_len >> 8) & 0xFF);
+	smp_cmd.header.len_l8 = (uint8_t)((payload_len >> 0) & 0xFF);
+	smp_cmd.header.group_h8 = 0;
+	smp_cmd.header.group_l8 = 1; /* IMAGE */
+	smp_cmd.header.seq = 0;
+	smp_cmd.header.id  = 1; /* UPLOAD */
+	
+	return bt_dfu_smp_command(dfu_smp, smp_upload_rsp_proc,
+				  sizeof(smp_cmd.header) + payload_len,
+				  &smp_cmd);
+}
+
 static int send_smp_list(struct bt_dfu_smp *dfu_smp,
 			 const char *string)
 {
@@ -535,7 +589,8 @@ static void button_reset(bool state)
 		printk("Reset test: %d\n", reset_cnt);
 		snprintk(buffer, sizeof(buffer), "Reset message: %u", reset_cnt);
 		//ret = send_smp_reset(&dfu_smp, buffer);
-		ret = send_smp_list(&dfu_smp, buffer);
+		//ret = send_smp_list(&dfu_smp, buffer);
+		ret = send_upload(&dfu_smp);
 		if (ret) {
 			printk("Reset command send error (err: %d)\n", ret);
 		}
