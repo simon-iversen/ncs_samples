@@ -410,6 +410,8 @@ static void smp_echo_rsp_proc(struct bt_dfu_smp *dfu_smp)
 
 }
 
+#define IMAGE_HEADER_SIZE		32
+
 static int send_upload(struct bt_dfu_smp *dfu_smp)
 {
 	zcbor_state_t zse[2];
@@ -418,6 +420,22 @@ static int send_upload(struct bt_dfu_smp *dfu_smp)
 
 	zcbor_new_encode_state(zse, ARRAY_SIZE(zse), smp_cmd.payload,
 			       sizeof(smp_cmd.payload), 0);
+
+		const struct device *flash_dev;
+	uint8_t data[100];
+
+	flash_dev = device_get_binding("NRF_FLASH_DRV_NAME");
+	int err = flash_read(flash_dev, 0xf6000, data, IMAGE_HEADER_SIZE);
+	if (err != 0) {
+		printk("Could not read bytes\n");
+	}else{
+		printk("Data: ");
+		for(int x=0; x<10; x++){
+			printk("%x ", data[x]);
+		}
+		printk("\n");
+	}
+
 
 	/* Stop encoding on the error. */
 	zse->constant_state->stop_on_error = true;
@@ -629,26 +647,11 @@ static void button_handler(uint32_t button_state, uint32_t has_changed)
 }
 
 
+
 void main(void)
 {
 	int err;
 
-	const struct device *dev;
-	const struct device *flash_dev;
-	uint8_t data[100];
-
-	dev = device_get_binding("NRF_FLASH_DRV_NAME");
-
-	err = flash_read(dev, 0xf6000, data, 100);
-	if (err != 0) {
-		printk("Could not read bytes\n");
-	}else{
-		printk("Data: ");
-		for(int x=0; x<10; x++){
-			printk("%d ", data[x]);
-		}
-		printk("\n");
-	}
 
 	printk("Starting Bluetooth Central SMP Client example\n");
 
