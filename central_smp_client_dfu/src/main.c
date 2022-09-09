@@ -27,6 +27,8 @@
 #include <bluetooth/services/dfu_smp.h>
 #include <dk_buttons_and_leds.h>
 
+#include <zephyr/device.h>
+#include <drivers/flash.h>
 
 /* Mimimal number of ZCBOR encoder states to provide full encoder functionality. */
 #define CBOR_ENCODER_STATE_NUM 2
@@ -422,7 +424,7 @@ static int send_upload(struct bt_dfu_smp *dfu_smp)
 	printk("Change\n");
 	zcbor_map_start_encode(zse, 20);
 	zcbor_tstr_put_lit(zse, "image");
-	zcbor_int64_put(zse, 5);
+	zcbor_int64_put(zse, 0);
 	zcbor_tstr_put_lit(zse, "data");
 	zcbor_bstr_put_lit(zse, "abc");
 	zcbor_tstr_put_lit(zse, "len");
@@ -630,6 +632,34 @@ static void button_handler(uint32_t button_state, uint32_t has_changed)
 void main(void)
 {
 	int err;
+	const struct flash_area *lfa;
+	//uint8_t custom_storage_id = FLASH_AREA_ID(CUSTOM_STORAGE);
+	const struct device *dev;
+	//printk("ID of custom storage: %d\n", custom_storage_id);
+	//printk("Offset of custom storage: %x\n",FLASH_AREA_OFFSET(CUSTOM_STORAGE));
+	const struct device *flash_dev;
+	uint8_t data[100];
+	//I checked in pm.config that id for custom storage was 1, but find better way to get this. See nvs sample
+	/*err = flash_area_open(custom_storage_id, &lfa);
+	if (err != 0) {
+		printk("Cound not open custom flash area");
+	}
+	
+
+	err = flash_area_read(lfa, 0, data, 10);*/
+
+	dev = device_get_binding("NRF_FLASH_DRV_NAME");
+
+	err = flash_read(dev, 0xf6000, data, 100);
+	if (err != 0) {
+		printk("Could not read bytes\n");
+	}else{
+		printk("Data: ");
+		for(int x=0; x<10; x++){
+			printk("%d ", data[x]);
+		}
+		printk("\n");
+	}
 
 	printk("Starting Bluetooth Central SMP Client example\n");
 
