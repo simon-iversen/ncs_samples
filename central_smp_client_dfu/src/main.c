@@ -422,7 +422,7 @@ static int send_upload(struct bt_dfu_smp *dfu_smp)
 			       sizeof(smp_cmd.payload), 0);
 
 		const struct device *flash_dev;
-	uint8_t data[100];
+	uint8_t data[33];
 
 	flash_dev = device_get_binding("NRF_FLASH_DRV_NAME");
 	int err = flash_read(flash_dev, 0xf6000, data, IMAGE_HEADER_SIZE);
@@ -435,6 +435,7 @@ static int send_upload(struct bt_dfu_smp *dfu_smp)
 		}
 		printk("\n");
 	}
+	data[IMAGE_HEADER_SIZE] = '\0';
 
 
 	/* Stop encoding on the error. */
@@ -444,7 +445,7 @@ static int send_upload(struct bt_dfu_smp *dfu_smp)
 	zcbor_tstr_put_lit(zse, "image");
 	zcbor_int64_put(zse, 0);
 	zcbor_tstr_put_lit(zse, "data");
-	zcbor_bstr_put_lit(zse, "abc");
+	zcbor_bstr_put_lit(zse, data);
 	zcbor_tstr_put_lit(zse, "len");
 	zcbor_uint64_put(zse, 100);
 	zcbor_tstr_put_lit(zse, "off");
