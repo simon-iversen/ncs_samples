@@ -271,6 +271,61 @@ static void smp_reset_rsp_proc(struct bt_dfu_smp *dfu_smp)
 static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
 {
 	printk("UPLOAD RESPONSE CB. Doing nothing\n");
+	size_t payload_len = ((uint16_t)smp_rsp_buff.header.len_h8) << 8 |
+				      smp_rsp_buff.header.len_l8;
+	zcbor_state_t zsd[CBOR_DECODER_STATE_NUM];
+	struct zcbor_string value = {0};
+	char map_key[SMP_ECHO_MAP_KEY_MAX_LEN];
+	char map_value[SMP_ECHO_MAP_VALUE_MAX_LEN];
+	bool ok;
+
+	zcbor_new_decode_state(zsd, ARRAY_SIZE(zsd), smp_rsp_buff.payload, payload_len, 1);
+
+	/* Stop decoding on the error. */
+	zsd->constant_state->stop_on_error = true;
+
+	zcbor_map_start_decode(zsd);
+	
+	ok = zcbor_tstr_decode(zsd, &value);
+	uint8_t length_payload = zsd->payload_end - zsd->payload;
+	if (!ok) {
+		printk("Decoding error (err: %d)\n", zcbor_pop_error(zsd));
+		return;
+	} else if ((value.len != 1) || (*value.value != 'r')) {
+		printk("Invalid data received.\n");
+		return;
+	} else {
+		/* Do nothing */
+	}
+	map_key[0] = value.value[0];
+
+		/* Add string NULL terminator */
+	map_key[1] = '\0';
+	ok = zcbor_tstr_decode(zsd, &value);
+	if (!ok) {
+		printk("Decoding error (err: %d)\n", zcbor_pop_error(zsd));
+		return;
+	} else if (value.len > (sizeof(map_value) - 1)) {
+		printk("To small buffer for received data.\n");
+		return;
+	} else {
+		/* Do nothing */
+	}
+	memcpy(map_value, value.value, value.len);
+	/* Add string NULL terminator */
+	map_value[value.len] = '\0';
+
+	zcbor_map_end_decode(zsd);
+	if (zcbor_check_error(zsd)) {
+		/* Print textual representation of the received CBOR map. */
+		printk("{_\"%s\": \"%s\"}\n", map_key, map_value);
+	} else {
+		printk("Cannot print received CBOR stream (err: %d)\n",
+				zcbor_pop_error(zsd));
+	}
+
+
+
 }
 
 static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
@@ -426,7 +481,7 @@ static int send_upload(struct bt_dfu_smp *dfu_smp)
 
 	flash_dev = device_get_binding("NRF_FLASH_DRV_NAME");
 	int err = flash_read(flash_dev, 0xf6000, data, IMAGE_HEADER_SIZE);
-	if (err != 0) {
+	/*if (err != 0) {
 		printk("Could not read bytes\n");
 	}else{
 		printk("Data: ");
@@ -434,6 +489,9 @@ static int send_upload(struct bt_dfu_smp *dfu_smp)
 			printk("%x ", data[x]);
 		}
 		printk("\n");
+	}*/
+	if(err){
+		printk("flash_read error: %d\n", err);
 	}
 	data[IMAGE_HEADER_SIZE] = '\0';
 
