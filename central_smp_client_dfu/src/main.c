@@ -271,58 +271,85 @@ static void smp_reset_rsp_proc(struct bt_dfu_smp *dfu_smp)
 static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
 {
 	printk("UPLOAD RESPONSE CB. Doing nothing\n");
-	size_t payload_len = ((uint16_t)smp_rsp_buff.header.len_h8) << 8 |
-				      smp_rsp_buff.header.len_l8;
+	uint8_t *p_outdata = (uint8_t *)(&smp_rsp_buff);
+	const struct bt_dfu_smp_rsp_state *rsp_state;
+
+	rsp_state = bt_dfu_smp_rsp_state(dfu_smp);
+	printk("Echo response part received, size: %zu.\n",
+	       rsp_state->chunk_size);
+
+	if (rsp_state->offset + rsp_state->chunk_size > sizeof(smp_rsp_buff)) {
+		printk("Response size buffer overflow\n");
+	} else {
+		p_outdata += rsp_state->offset;
+		memcpy(p_outdata,
+		       rsp_state->data,
+		       rsp_state->chunk_size);
+	}
+
+
+	size_t payload_len = ((uint16_t)smp_rsp_buff.header.len_h8) << 8 |smp_rsp_buff.header.len_l8;
 	zcbor_state_t zsd[CBOR_DECODER_STATE_NUM];
 	struct zcbor_string value = {0};
 	char map_key[SMP_ECHO_MAP_KEY_MAX_LEN];
 	char map_value[SMP_ECHO_MAP_VALUE_MAX_LEN];
 	bool ok;
-
+	printk("Lenght of payload: %d\n", payload_len);
+	printk(" Bytes: ");
+	for(int x = 0; x < payload_len;x++){
+		printk("%x ",  smp_rsp_buff.payload[x]);
+	}
+	printk("\n");
 	zcbor_new_decode_state(zsd, ARRAY_SIZE(zsd), smp_rsp_buff.payload, payload_len, 1);
 
 	/* Stop decoding on the error. */
 	zsd->constant_state->stop_on_error = true;
 
-	zcbor_map_start_decode(zsd);
+	ok = zcbor_map_start_decode(zsd);
+	if (!ok) {
+		printk("zcbor_map_start_decode decoding error (err: %d)\n", zcbor_pop_error(zsd));
+		return;
+	} else {
+		printk("zcbor_map_start_decode() successfully run\n");
+	}
 	
 	ok = zcbor_tstr_decode(zsd, &value);
 	uint8_t length_payload = zsd->payload_end - zsd->payload;
 	if (!ok) {
-		printk("Decoding error (err: %d)\n", zcbor_pop_error(zsd));
+		printk("sdf Decoding error (err: %d)\n", zcbor_pop_error(zsd));
 		return;
-	} else if ((value.len != 1) || (*value.value != 'r')) {
-		printk("Invalid data received.\n");
-		return;
-	} else {
-		/* Do nothing */
+	}  else {
+		printk("Successfully decoded\n");
 	}
-	map_key[0] = value.value[0];
+	char map_key2[20];
+	memcpy(map_key2, value.value, value.len);
+	map_key2[value.len] = '\0';
+	printk("Key value: %s\n", map_key2);
+	
+	/*map_key[0] = value.value[0];
 
-		/* Add string NULL terminator */
+	
 	map_key[1] = '\0';
 	ok = zcbor_tstr_decode(zsd, &value);
 	if (!ok) {
-		printk("Decoding error (err: %d)\n", zcbor_pop_error(zsd));
-		return;
-	} else if (value.len > (sizeof(map_value) - 1)) {
-		printk("To small buffer for received data.\n");
+		//fails here
+		printk("234fd Decoding error (err: %d)\n", zcbor_pop_error(zsd));
 		return;
 	} else {
-		/* Do nothing */
+		printk("Successfully decoded\n");
 	}
 	memcpy(map_value, value.value, value.len);
-	/* Add string NULL terminator */
+	
 	map_value[value.len] = '\0';
 
 	zcbor_map_end_decode(zsd);
 	if (zcbor_check_error(zsd)) {
-		/* Print textual representation of the received CBOR map. */
+		
 		printk("{_\"%s\": \"%s\"}\n", map_key, map_value);
 	} else {
 		printk("Cannot print received CBOR stream (err: %d)\n",
 				zcbor_pop_error(zsd));
-	}
+	}*/
 
 
 
@@ -360,6 +387,16 @@ static void smp_echo_rsp_proc(struct bt_dfu_smp *dfu_smp)
 {
 	uint8_t *p_outdata = (uint8_t *)(&smp_rsp_buff);
 	const struct bt_dfu_smp_rsp_state *rsp_state;
+
+	size_t payload_len2 = ((uint16_t)smp_rsp_buff.header.len_h8) << 8 |
+				      smp_rsp_buff.header.len_l8;
+
+	printk("ECHO Lenght of payload: %d\n", payload_len2);
+	printk("ECHO Bytes: ");
+	for(int x = 0; x < 10;x++){
+		printk("%x ",  smp_rsp_buff.payload[x]);
+	}
+	printk("\n");
 
 	rsp_state = bt_dfu_smp_rsp_state(dfu_smp);
 	printk("Echo response part received, size: %zu.\n",
@@ -405,6 +442,13 @@ static void smp_echo_rsp_proc(struct bt_dfu_smp *dfu_smp)
 
 		/* Stop decoding on the error. */
 		zsd->constant_state->stop_on_error = true;
+
+		printk("ECHO 2 Lenght of payload: %d\n", payload_len2);
+		printk("ECHO 2 Bytes: ");
+		for(int x = 0; x < 10;x++){
+			printk("%x ",  smp_rsp_buff.payload[x]);
+		}
+		printk("\n");
 
 		zcbor_map_start_decode(zsd);
 		
