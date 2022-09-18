@@ -324,11 +324,45 @@ static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
 	char map_key2[20];
 	memcpy(map_key2, value.value, value.len);
 	map_key2[value.len] = '\0';
-	printk("Key value: %s\n", map_key2);
+	printk("rc: %s\n", map_key2);
+	int32_t map_value2;
+	ok = zcbor_int32_decode(zsd, &map_value2);
+	if (!ok) {
+		printk("sdf Decoding error (err: %d)\n", zcbor_pop_error(zsd));
+		return;
+	}  else {
+		printk("Successfully decoded\n");
+	}
+	
+	//memcpy(map_value2, value.value, value.len);
+	printk("rc value: %d\n", map_value2);
+
+	ok = zcbor_tstr_decode(zsd, &value);
+	if (!ok) {
+		printk("sdf Decoding error (err: %d)\n", zcbor_pop_error(zsd));
+		return;
+	}  else {
+		printk("Successfully decoded\n");
+	}
+	char offset[20];
+	memcpy(offset, value.value, value.len);
+	offset[value.len] = '\0';
+	printk("Offset: %s\n", offset);
+
+	int32_t offset_val;
+	ok = zcbor_int32_decode(zsd, &offset_val);
+	if (!ok) {
+		printk("sdf Decoding error (err: %d)\n", zcbor_pop_error(zsd));
+		return;
+	}  else {
+		printk("Successfully decoded\n");
+	}
+	
+	//memcpy(map_value2, value.value, value.len);
+	printk("offs value: %d\n", offset_val);
 	
 	/*map_key[0] = value.value[0];
 
-	
 	map_key[1] = '\0';
 	ok = zcbor_tstr_decode(zsd, &value);
 	if (!ok) {
