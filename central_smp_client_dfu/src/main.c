@@ -270,12 +270,11 @@ static void smp_reset_rsp_proc(struct bt_dfu_smp *dfu_smp)
 
 static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
 {
-	printk("UPLOAD RESPONSE CB. Doing nothing\n");
 	uint8_t *p_outdata = (uint8_t *)(&smp_rsp_buff);
 	const struct bt_dfu_smp_rsp_state *rsp_state;
 
 	rsp_state = bt_dfu_smp_rsp_state(dfu_smp);
-	printk("Echo response part received, size: %zu.\n",
+	printk("Upload response part received, size: %zu.\n",
 	       rsp_state->chunk_size);
 
 	if (rsp_state->offset + rsp_state->chunk_size > sizeof(smp_rsp_buff)) {
@@ -294,12 +293,6 @@ static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
 	char map_key[SMP_ECHO_MAP_KEY_MAX_LEN];
 	char map_value[SMP_ECHO_MAP_VALUE_MAX_LEN];
 	bool ok;
-	printk("Lenght of payload: %d\n", payload_len);
-	printk(" Bytes: ");
-	for(int x = 0; x < payload_len;x++){
-		printk("%x ",  smp_rsp_buff.payload[x]);
-	}
-	printk("\n");
 	zcbor_new_decode_state(zsd, ARRAY_SIZE(zsd), smp_rsp_buff.payload, payload_len, 1);
 
 	/* Stop decoding on the error. */
@@ -307,114 +300,80 @@ static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
 
 	ok = zcbor_map_start_decode(zsd);
 	if (!ok) {
-		printk("zcbor_map_start_decode decoding error (err: %d)\n", zcbor_pop_error(zsd));
+		printk("Decoding error, start_decode (err: %d)\n", zcbor_pop_error(zsd));
 		return;
-	} else {
-		printk("zcbor_map_start_decode() successfully run\n");
-	}
+	} 
 	
-	ok = zcbor_tstr_decode(zsd, &value);
-	uint8_t length_payload = zsd->payload_end - zsd->payload;
-	if (!ok) {
-		printk("sdf Decoding error (err: %d)\n", zcbor_pop_error(zsd));
-		return;
-	}  else {
-		printk("Successfully decoded\n");
-	}
-	char map_key2[20];
-	memcpy(map_key2, value.value, value.len);
-	map_key2[value.len] = '\0';
-	printk("rc: %s\n", map_key2);
-	int32_t map_value2;
-	ok = zcbor_int32_decode(zsd, &map_value2);
-	if (!ok) {
-		printk("sdf Decoding error (err: %d)\n", zcbor_pop_error(zsd));
-		return;
-	}  else {
-		printk("Successfully decoded\n");
-	}
-	
-	//memcpy(map_value2, value.value, value.len);
-	printk("rc value: %d\n", map_value2);
+	/**
+	 * 
+	 * Decoding rc (status error code)
+	 * 
+	*/
 
+	//Decoding rc key
+	char rc_key[5];
 	ok = zcbor_tstr_decode(zsd, &value);
 	if (!ok) {
-		printk("sdf Decoding error (err: %d)\n", zcbor_pop_error(zsd));
+		printk("Decoding error, rc key (err: %d)\n", zcbor_pop_error(zsd));
 		return;
-	}  else {
-		printk("Successfully decoded\n");
+	}  else if (value.len != 2) {
+		printk("Invalid data received (rc key). Length %d is not equal 2\n", value.len);
+		return;
+	} else if(!strncmp(value.value, 'rc', 2)){
+		printk("Invalid data received (rc key). String '%.2s' is not equal to 'rc'\n", value.value);
+		return;
 	}
-	char offset[20];
-	memcpy(offset, value.value, value.len);
-	offset[value.len] = '\0';
-	printk("Offset: %s\n", offset);
+	memcpy(rc_key, value.value, value.len);
+	rc_key[value.len] = '\0';
 
-	int32_t offset_val;
-	ok = zcbor_int32_decode(zsd, &offset_val);
+	//Decoding rc value
+	int32_t rc_value;
+	ok = zcbor_int32_decode(zsd, &rc_value);
 	if (!ok) {
-		printk("sdf Decoding error (err: %d)\n", zcbor_pop_error(zsd));
+		printk("Decoding error, rc value (err: %d)\n", zcbor_pop_error(zsd));
 		return;
-	}  else {
-		printk("Successfully decoded\n");
-	}
-	
-	//memcpy(map_value2, value.value, value.len);
-	printk("offs value: %d\n", offset_val);
-	
-	/*map_key[0] = value.value[0];
+	};
 
-	map_key[1] = '\0';
+	//decoding offset key
+	char off_key[5];
 	ok = zcbor_tstr_decode(zsd, &value);
 	if (!ok) {
-		//fails here
-		printk("234fd Decoding error (err: %d)\n", zcbor_pop_error(zsd));
+		printk("Decoding error, offset key (err: %d)\n", zcbor_pop_error(zsd));
 		return;
-	} else {
-		printk("Successfully decoded\n");
+	} else if ((value.len != 3)) {
+		printk("Invalid data received (rc key). Length %d is not equal 3\n", value.len);
+		return;
+	} else if(!strncmp(value.value, 'off', 3)){
+		printk("sdfsdfafsda\n");
+		//printk("Invalid data received (offset key). String '%.3s' is not equal to 'off'\n", value.value);
+		return;
 	}
-	memcpy(map_value, value.value, value.len);
-	
-	map_value[value.len] = '\0';
 
+	memcpy(off_key, value.value, value.len);
+	off_key[value.len] = '\0';
+
+	//Decoding offset value
+	int32_t off_val;
+	ok = zcbor_int32_decode(zsd, &off_val);
+	if (!ok) {
+		printk("sdf Decoding error, offset value (err: %d)\n", zcbor_pop_error(zsd));
+		return;
+	}
 	zcbor_map_end_decode(zsd);
 	if (zcbor_check_error(zsd)) {
-		
-		printk("{_\"%s\": \"%s\"}\n", map_key, map_value);
+		/* Print textual representation of the received CBOR map. */
+		printk("%s: %d\n", rc_key, rc_value);
+		printk("%s: %d\n", off_key, off_val);
 	} else {
-		printk("Cannot print received CBOR stream (err: %d)\n",
+		printk("Cannot print received image upload CBOR stream (err: %d)\n",
 				zcbor_pop_error(zsd));
-	}*/
-
-
+	}
 
 }
 
 static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 {
 	printk("LIST RESPONSE CB. Doing nothing\n");
-	/*uint8_t *p_outdata = (uint8_t *)(&smp_rsp_buff);
-	const struct bt_dfu_smp_rsp_state *rsp_state;
-
-	rsp_state = bt_dfu_smp_rsp_state(dfu_smp);
-	printk("Echo response part received, size: %zu.\n",
-	       rsp_state->chunk_size);
-
-	if (bt_dfu_smp_rsp_total_check(dfu_smp)) {
-		zcbor_state_t zsd[CBOR_DECODER_STATE_NUM];
-		size_t payload_len = ((uint16_t)smp_rsp_buff.header.len_h8) << 8 |
-				      smp_rsp_buff.header.len_l8;
-		zcbor_new_decode_state(zsd, ARRAY_SIZE(zsd), smp_rsp_buff.payload, payload_len, 1);
-		uint8_t length_payload = zsd->payload_end - zsd->payload;
-		uint8_t payl_offs = 0;
-		printk("Start addr of payload: 0x%x\n", zsd->payload);
-		printk("end addr of payload: 0x%x\n", zsd->payload_end);
-		printk("Received bytes: 0x");
-		while(payl_offs <length_payload){
-			printk("%x", zsd->payload[payl_offs]);
-			payl_offs++;
-		}
-		printk("\n");
-	}*/
 }
 
 static void smp_echo_rsp_proc(struct bt_dfu_smp *dfu_smp)
@@ -559,18 +518,11 @@ static int send_upload(struct bt_dfu_smp *dfu_smp)
 
 	flash_dev = device_get_binding("NRF_FLASH_DRV_NAME");
 	int err = flash_read(flash_dev, 0xf6000, data, IMAGE_HEADER_SIZE);
-	/*if (err != 0) {
-		printk("Could not read bytes\n");
-	}else{
-		printk("Data: ");
-		for(int x=0; x<10; x++){
-			printk("%x ", data[x]);
-		}
-		printk("\n");
-	}*/
-	if(err){
-		printk("flash_read error: %d\n", err);
+	if (err != 0) {
+		printk("flash_read failed\n");
+		return err;
 	}
+
 	data[IMAGE_HEADER_SIZE] = '\0';
 
 
@@ -594,8 +546,7 @@ static int send_upload(struct bt_dfu_smp *dfu_smp)
 
 	if (!zcbor_check_error(zse)) {
 		printk("Failed to encode SMP test packet, err: %d\n", zcbor_pop_error(zse));
-	}else{
-		printk("Successfully encoded SMP test packet");
+		return 50;
 	}
 
 	payload_len = (size_t)(zse->payload - smp_cmd.payload);
@@ -733,23 +684,16 @@ static int send_smp_echo(struct bt_dfu_smp *dfu_smp,
 				  &smp_cmd);
 }
 
-static void button_reset(bool state)
+static void button_upload(bool state)
 {
 	
 	if (state) {
-		printk("Reset command\n");
-		static unsigned int reset_cnt;
-		char buffer[32];
+		printk("Upload command\n");
 		int ret;
 
-		++reset_cnt;
-		printk("Reset test: %d\n", reset_cnt);
-		snprintk(buffer, sizeof(buffer), "Reset message: %u", reset_cnt);
-		//ret = send_smp_reset(&dfu_smp, buffer);
-		//ret = send_smp_list(&dfu_smp, buffer);
 		ret = send_upload(&dfu_smp);
 		if (ret) {
-			printk("Reset command send error (err: %d)\n", ret);
+			printk("Upload command send error (err: %d)\n", ret);
 		}
 	}
 }
@@ -779,7 +723,7 @@ static void button_handler(uint32_t button_state, uint32_t has_changed)
 		button_echo(button_state & KEY_ECHO_MASK);
 	}
 	if(has_changed & KEY_RESET_MASK){
-		button_reset(button_state & KEY_RESET_MASK);
+		button_upload(button_state & KEY_RESET_MASK);
 	}
 }
 
