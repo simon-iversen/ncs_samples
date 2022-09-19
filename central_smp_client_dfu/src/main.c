@@ -494,7 +494,7 @@ static void smp_echo_rsp_proc(struct bt_dfu_smp *dfu_smp)
 
 }
 
-#define IMAGE_HEADER_SIZE		32
+#define UPLOAD_CHUNK		300
 
 static int send_upload(struct bt_dfu_smp *dfu_smp)
 {
@@ -506,14 +506,21 @@ static int send_upload(struct bt_dfu_smp *dfu_smp)
 			       sizeof(smp_cmd.payload), 0);
 
 	const struct device *flash_dev;
-	uint8_t data[33];
+	uint8_t data[UPLOAD_CHUNK];
 
 	flash_dev = device_get_binding("NRF_FLASH_DRV_NAME");
-	int err = flash_read(flash_dev, 0xf6000, data, IMAGE_HEADER_SIZE);
-	if (err != 0) {
-		printk("flash_read failed\n");
-		return err;
+	int last_addr = 0xFBB5E;
+	int curr_addr = 0xf6000;
+	while(curr_addr <=last_addr){
+		int err = flash_read(flash_dev, curr_addr, data, UPLOAD_CHUNK);
+		if (err != 0) {
+			printk("flash_read failed\n");
+			return err;
+		}
+		curr_addr+=UPLOAD_CHUNK;
+		
 	}
+
 
 	data[IMAGE_HEADER_SIZE] = '\0';
 
