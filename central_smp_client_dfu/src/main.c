@@ -286,110 +286,119 @@ static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
 		       rsp_state->chunk_size);
 	}
 
+	if (bt_dfu_smp_rsp_total_check(dfu_smp)) {
+		if (smp_rsp_buff.header.op != 3 /* WRITE RSP*/) {
+			printk("Unexpected operation code (%u)!\n",
+			       smp_rsp_buff.header.op);
+			return;
+		}
+		uint16_t group = ((uint16_t)smp_rsp_buff.header.group_h8) << 8 |
+				      smp_rsp_buff.header.group_l8;
+		if (group != 1 /* Application/software image management group */) {
+			printk("Unexpected command group (%u)!\n", group);
+			return;
+		}
+		if (smp_rsp_buff.header.id != 1 /* UPLOAD */) {
+			printk("Unexpected command (%u)",
+			       smp_rsp_buff.header.id);
+			return;
+		}
+		size_t payload_len = ((uint16_t)smp_rsp_buff.header.len_h8) << 8 |
+				      smp_rsp_buff.header.len_l8;
+		
+		zcbor_state_t zsd[CBOR_DECODER_STATE_NUM];
+		struct zcbor_string value = {0};
+		bool ok;
+		zcbor_new_decode_state(zsd, ARRAY_SIZE(zsd), smp_rsp_buff.payload, payload_len, 1);
 
-	size_t payload_len = ((uint16_t)smp_rsp_buff.header.len_h8) << 8 |smp_rsp_buff.header.len_l8;
-	zcbor_state_t zsd[CBOR_DECODER_STATE_NUM];
-	struct zcbor_string value = {0};
-	char map_key[SMP_ECHO_MAP_KEY_MAX_LEN];
-	char map_value[SMP_ECHO_MAP_VALUE_MAX_LEN];
-	bool ok;
-	zcbor_new_decode_state(zsd, ARRAY_SIZE(zsd), smp_rsp_buff.payload, payload_len, 1);
+		/* Stop decoding on the error. */
+		zsd->constant_state->stop_on_error = true;
 
-	/* Stop decoding on the error. */
-	zsd->constant_state->stop_on_error = true;
+		ok = zcbor_map_start_decode(zsd);
+		if (!ok) {
+			printk("Decoding error, start_decode (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		} 
+		
+		/**
+		 * 
+		 * Decoding rc (status error code)
+		 * 
+		*/
 
-	ok = zcbor_map_start_decode(zsd);
-	if (!ok) {
-		printk("Decoding error, start_decode (err: %d)\n", zcbor_pop_error(zsd));
-		return;
-	} 
+		//Decoding rc key
+		char rc_key[5];
+		ok = zcbor_tstr_decode(zsd, &value);
+		if (!ok) {
+			printk("Decoding error, rc key (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}  else if (value.len != 2) {
+			printk("Invalid data received (rc key). Length %d is not equal 2\n", value.len);
+			return;
+		} else if(!strncmp(value.value, 'rc', 2)){
+			printk("Invalid data received (rc key). String '%.2s' is not equal to 'rc'\n", value.value);
+			return;
+		}
+		memcpy(rc_key, value.value, value.len);
+		rc_key[value.len] = '\0';
+
+		//Decoding rc value
+		int32_t rc_value;
+		ok = zcbor_int32_decode(zsd, &rc_value);
+		if (!ok) {
+			printk("Decoding error, rc value (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		};
+
+		//decoding offset key
+		char off_key[5];
+		ok = zcbor_tstr_decode(zsd, &value);
+		if (!ok) {
+			printk("Decoding error, offset key (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		} else if ((value.len != 3)) {
+			printk("Invalid data received (rc key). Length %d is not equal 3\n", value.len);
+			return;
+		}
+		//TODO: The below throws a BUS FAULT. Look into it.
+		/* else if(!strncmp(value.value, 'off', 3)){
+			printk("Invalid data received (offset key). String '%.3s' is not equal to 'off'\n", value.value);
+			return;
+		}*/
+
+		memcpy(off_key, value.value, value.len);
+		off_key[value.len] = '\0';
+
+		//Decoding offset value
+		int32_t off_val;
+		ok = zcbor_int32_decode(zsd, &off_val);
+		if (!ok) {
+			printk("Decoding error, offset value (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}
+		zcbor_map_end_decode(zsd);
+		if (zcbor_check_error(zsd)) {
+			/* Print textual representation of the received CBOR map. */
+			printk("%s: %d\n", rc_key, rc_value);
+			printk("%s: %d\n", off_key, off_val);
+		} else {
+			printk("Cannot print received image upload CBOR stream (err: %d)\n",
+					zcbor_pop_error(zsd));
+		}
+	}
 	
-	/**
-	 * 
-	 * Decoding rc (status error code)
-	 * 
-	*/
-
-	//Decoding rc key
-	char rc_key[5];
-	ok = zcbor_tstr_decode(zsd, &value);
-	if (!ok) {
-		printk("Decoding error, rc key (err: %d)\n", zcbor_pop_error(zsd));
-		return;
-	}  else if (value.len != 2) {
-		printk("Invalid data received (rc key). Length %d is not equal 2\n", value.len);
-		return;
-	} else if(!strncmp(value.value, 'rc', 2)){
-		printk("Invalid data received (rc key). String '%.2s' is not equal to 'rc'\n", value.value);
-		return;
-	}
-	memcpy(rc_key, value.value, value.len);
-	rc_key[value.len] = '\0';
-
-	//Decoding rc value
-	int32_t rc_value;
-	ok = zcbor_int32_decode(zsd, &rc_value);
-	if (!ok) {
-		printk("Decoding error, rc value (err: %d)\n", zcbor_pop_error(zsd));
-		return;
-	};
-
-	//decoding offset key
-	char off_key[5];
-	ok = zcbor_tstr_decode(zsd, &value);
-	if (!ok) {
-		printk("Decoding error, offset key (err: %d)\n", zcbor_pop_error(zsd));
-		return;
-	} else if ((value.len != 3)) {
-		printk("Invalid data received (rc key). Length %d is not equal 3\n", value.len);
-		return;
-	} else if(!strncmp(value.value, 'off', 3)){
-		printk("sdfsdfafsda\n");
-		//printk("Invalid data received (offset key). String '%.3s' is not equal to 'off'\n", value.value);
-		return;
-	}
-
-	memcpy(off_key, value.value, value.len);
-	off_key[value.len] = '\0';
-
-	//Decoding offset value
-	int32_t off_val;
-	ok = zcbor_int32_decode(zsd, &off_val);
-	if (!ok) {
-		printk("sdf Decoding error, offset value (err: %d)\n", zcbor_pop_error(zsd));
-		return;
-	}
-	zcbor_map_end_decode(zsd);
-	if (zcbor_check_error(zsd)) {
-		/* Print textual representation of the received CBOR map. */
-		printk("%s: %d\n", rc_key, rc_value);
-		printk("%s: %d\n", off_key, off_val);
-	} else {
-		printk("Cannot print received image upload CBOR stream (err: %d)\n",
-				zcbor_pop_error(zsd));
-	}
 
 }
 
 static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 {
-	printk("LIST RESPONSE CB. Doing nothing\n");
+	printk("List response callback. Doing nothing\n");
 }
 
 static void smp_echo_rsp_proc(struct bt_dfu_smp *dfu_smp)
 {
 	uint8_t *p_outdata = (uint8_t *)(&smp_rsp_buff);
 	const struct bt_dfu_smp_rsp_state *rsp_state;
-
-	size_t payload_len2 = ((uint16_t)smp_rsp_buff.header.len_h8) << 8 |
-				      smp_rsp_buff.header.len_l8;
-
-	printk("ECHO Lenght of payload: %d\n", payload_len2);
-	printk("ECHO Bytes: ");
-	for(int x = 0; x < 10;x++){
-		printk("%x ",  smp_rsp_buff.payload[x]);
-	}
-	printk("\n");
 
 	rsp_state = bt_dfu_smp_rsp_state(dfu_smp);
 	printk("Echo response part received, size: %zu.\n",
@@ -436,26 +445,9 @@ static void smp_echo_rsp_proc(struct bt_dfu_smp *dfu_smp)
 		/* Stop decoding on the error. */
 		zsd->constant_state->stop_on_error = true;
 
-		printk("ECHO 2 Lenght of payload: %d\n", payload_len2);
-		printk("ECHO 2 Bytes: ");
-		for(int x = 0; x < 10;x++){
-			printk("%x ",  smp_rsp_buff.payload[x]);
-		}
-		printk("\n");
-
 		zcbor_map_start_decode(zsd);
 		
 		ok = zcbor_tstr_decode(zsd, &value);
-		printk("Start addr of payload: 0x%x\n", zsd->payload);
-		printk("end addr of payload: 0x%x\n", zsd->payload_end);
-		uint8_t length_payload = zsd->payload_end - zsd->payload;
-		uint8_t payl_offs = 0;
-		printk("Received bytes: 0x");
-		while(payl_offs <length_payload){
-			printk("%x", zsd->payload[payl_offs]);
-			payl_offs++;
-		}
-		printk("\n");
 
 		if (!ok) {
 			printk("Decoding error (err: %d)\n", zcbor_pop_error(zsd));
@@ -513,7 +505,7 @@ static int send_upload(struct bt_dfu_smp *dfu_smp)
 	zcbor_new_encode_state(zse, ARRAY_SIZE(zse), smp_cmd.payload,
 			       sizeof(smp_cmd.payload), 0);
 
-		const struct device *flash_dev;
+	const struct device *flash_dev;
 	uint8_t data[33];
 
 	flash_dev = device_get_binding("NRF_FLASH_DRV_NAME");
@@ -528,7 +520,6 @@ static int send_upload(struct bt_dfu_smp *dfu_smp)
 
 	/* Stop encoding on the error. */
 	zse->constant_state->stop_on_error = true;
-	printk("Change\n");
 	zcbor_map_start_encode(zse, 20);
 	zcbor_tstr_put_lit(zse, "image");
 	zcbor_int64_put(zse, 0);
