@@ -278,8 +278,7 @@ static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
 	const struct bt_dfu_smp_rsp_state *rsp_state;
 
 	rsp_state = bt_dfu_smp_rsp_state(dfu_smp);
-	printk("Upload response part received, size: %zu.\n",
-	       rsp_state->chunk_size);
+	//printk("Upload response part received, size: %zu.\n",rsp_state->chunk_size);
 
 	if (rsp_state->offset + rsp_state->chunk_size > sizeof(smp_rsp_buff)) {
 		printk("Response size buffer overflow\n");
@@ -329,8 +328,6 @@ static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
 		 * Decoding rc (status error code)
 		 * 
 		*/
-		k_sem_give(&upload_sem);
-		return;
 
 		//Decoding rc key
 		char rc_key[5];
@@ -511,10 +508,9 @@ void send_upload2(struct k_work *item)
 	printk("Send upload 2 is running\n");
    	zcbor_state_t zse[2];
 	size_t payload_len;
-	static struct smp_buffer smp_cmd;
+	
 
-	zcbor_new_encode_state(zse, ARRAY_SIZE(zse), smp_cmd.payload,
-			       sizeof(smp_cmd.payload), 0);
+	
 
 	const struct device *flash_dev;
 	uint8_t data[UPLOAD_CHUNK+1];
@@ -529,10 +525,13 @@ void send_upload2(struct k_work *item)
 	int upload_chunk = UPLOAD_CHUNK;
 	int err;
 	while(curr_addr <last_addr){
+		struct smp_buffer smp_cmd;
+		zcbor_new_encode_state(zse, ARRAY_SIZE(zse), smp_cmd.payload,
+			       sizeof(smp_cmd.payload), 0);
 		//Wait until response is received until sending the next chunk
-		printk("Before upload semaphore\n");
+		//printk("Before upload semaphore\n");
 		k_sem_take(&upload_sem, K_FOREVER);
-		printk("After upload semaphore\n");
+		//printk("After upload semaphore\n");
 		//If the whole binary is sent, then break this loop
 		
 		/**
@@ -563,98 +562,33 @@ void send_upload2(struct k_work *item)
 		}
 
 		data[upload_chunk] = '\0';
-		printk("Sending bytes: 0x");
+		/*printk("Sending bytes: 0x");
 		for(int x = 0;x < upload_chunk+1; x++){
 			printk("(%d)%x ",x,data[x]);
 		}
-		printk("\n");
+		printk("\n");*/
 		bool decode_error = true;
 		/* Stop encoding on the error. */
 		zse->constant_state->stop_on_error = true;
-		printk("Image length: %d | 0x%x\n",image_length,image_length);
+		/*printk("Image length: %d | 0x%x\n",image_length,image_length);
 		printk("Image offset: 0x%x\n", curr_addr - start_addr);
 		printk("Length of data: %d\n", strlen(data));
 		printk("Size of data: %d\n", sizeof(data)-1);
 		printk("Change\n");
-		printk("Decoding 1\n");
-		decode_error = zcbor_map_start_encode(zse, 20);
-		if(!decode_error){
-			printk("Decoding 2\n");
-		}else{
-			printk("ok\n");
-		}
-		decode_error = zcbor_tstr_put_lit(zse, "image");
-		if(!decode_error){
-			printk("Decoding 3\n");
-		}else{
-			printk("ok\n");
-		}
-		decode_error = zcbor_int64_put(zse, 0);
-		if(!decode_error){
-			printk("Decoding 4\n");
-		}else{
-			printk("ok\n");
-		}
-		decode_error = zcbor_tstr_put_lit(zse, "data");
-		if(!decode_error){
-			printk("Decoding 5\n");
-		}else{
-			printk("ok\n");
-		}
-		decode_error = zcbor_bstr_put_lit(zse, "12345");//data);
-		if(!decode_error){
-			printk("Decoding 6\n");
-		}else{
-			printk("ok\n");
-		}
-		decode_error = zcbor_tstr_put_lit(zse, "len");
-		if(!decode_error){
-			printk("Decoding 7\n");
-		}else{
-			printk("ok\n");
-		}
-		decode_error = zcbor_uint64_put(zse, (uint64_t)0x5B68);
-		if(!decode_error){
-			printk("Decoding 8\n");
-		}else{
-			printk("ok\n");
-		}
-		decode_error = zcbor_tstr_put_lit(zse, "off");
-		if(!decode_error){
-			printk("Decoding 9\n");
-		}else{
-			printk("ok\n");
-		}
-		decode_error = zcbor_uint64_put(zse, curr_addr - start_addr);
-		if(!decode_error){
-			printk("Decoding 10\n");
-		}else{
-			printk("ok\n");
-		}
-		decode_error = zcbor_tstr_put_lit(zse, "sha");
-		if(!decode_error){
-			printk("Decoding 11\n");
-		}else{
-			printk("ok\n");
-		}
-		decode_error = zcbor_bstr_put_lit(zse, "12345");
-		if(!decode_error){
-			printk("Decoding 12\n");
-		}else{
-			printk("ok\n");
-		}
-		decode_error = zcbor_tstr_put_lit(zse, "upgrade");
-		if(!decode_error){
-			printk("Decoding 13\n");
-		}else{
-			printk("ok\n");
-		}
-		decode_error = zcbor_bool_put(zse, false);
-		if(!decode_error){
-			printk("Decoding 14\n");
-		}else{
-			printk("ok\n");
-		}
+		printk("Decoding 1\n");*/
+		zcbor_map_start_encode(zse, 20);
+		zcbor_tstr_put_lit(zse, "image");
+		zcbor_int64_put(zse, 0);
+		zcbor_tstr_put_lit(zse, "data");
+		zcbor_bstr_put_lit(zse, data);
+		zcbor_tstr_put_lit(zse, "len");
+		zcbor_uint64_put(zse, (uint64_t)0x5B68);
+		zcbor_tstr_put_lit(zse, "off");
+		zcbor_uint64_put(zse, curr_addr - start_addr);
+		zcbor_tstr_put_lit(zse, "sha");
+		zcbor_bstr_put_lit(zse, "12345");
+		zcbor_tstr_put_lit(zse, "upgrade");
+		zcbor_bool_put(zse, false);
 		zcbor_map_end_encode(zse, 20);
 
 		if (!zcbor_check_error(zse)) {
@@ -686,8 +620,8 @@ void send_upload2(struct k_work *item)
 			printk("1 Failed to encode SMP test packet, err: %d\n", zcbor_pop_error(zse));
 			return 50;
 		}*/
-		printk("zse->payload: %d\n", zse->payload);
-		printk("smp_cmd.payload: %d\n", smp_cmd.payload);
+		//printk("zse->payload: %d\n", zse->payload);
+		//printk("smp_cmd.payload: %d\n", smp_cmd.payload);
 
 		payload_len = (size_t)(zse->payload - smp_cmd.payload);
 
@@ -699,9 +633,9 @@ void send_upload2(struct k_work *item)
 		smp_cmd.header.group_l8 = 1; /* IMAGE */
 		smp_cmd.header.seq = 0;
 		smp_cmd.header.id  = 1; /* UPLOAD */
-		printk("Total size of packet to send: %d\n", sizeof(smp_cmd.header) + payload_len);
+		/*printk("Total size of packet to send: %d\n", sizeof(smp_cmd.header) + payload_len);
 		printk("Header size: %d\n", sizeof(smp_cmd.header));
-		printk("Payload size: %d\n", payload_len);
+		printk("Payload size: %d\n", payload_len);*/
 		err = bt_dfu_smp_command(&dfu_smp, smp_upload_rsp_proc,
 					sizeof(smp_cmd.header) + payload_len,
 					&smp_cmd);
