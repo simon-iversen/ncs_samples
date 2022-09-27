@@ -51,6 +51,10 @@ static struct bt_conn *default_conn;
 static struct bt_dfu_smp dfu_smp;
 static struct bt_gatt_exchange_params exchange_params;
 
+struct k_work upload_work_item;
+struct k_sem upload_sem;
+K_SEM_DEFINE(upload_sem, 1, 1);
+
 /* Buffer for response */
 struct smp_buffer {
 	struct bt_dfu_smp_header header;
@@ -325,6 +329,8 @@ static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
 		 * Decoding rc (status error code)
 		 * 
 		*/
+		k_sem_give(&upload_sem);
+		return;
 
 		//Decoding rc key
 		char rc_key[5];
@@ -349,6 +355,10 @@ static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
 			printk("Decoding error, rc value (err: %d)\n", zcbor_pop_error(zsd));
 			return;
 		};
+		if(rc_value){
+			printk("Error in image upload response: %d\n", rc_value);
+			return;
+		}
 
 		//decoding offset key
 		char off_key[5];
@@ -385,9 +395,9 @@ static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
 			printk("Cannot print received image upload CBOR stream (err: %d)\n",
 					zcbor_pop_error(zsd));
 		}
+		k_sem_give(&upload_sem);
 	}
 	
-
 }
 
 static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
@@ -494,9 +504,215 @@ static void smp_echo_rsp_proc(struct bt_dfu_smp *dfu_smp)
 
 }
 
-#define UPLOAD_CHUNK		300
+#define UPLOAD_CHUNK		50 //This has to be at least 32 bytes, since first it has to send the whole header (which is 32 bytes)
 
-static int send_upload(struct bt_dfu_smp *dfu_smp)
+void send_upload2(struct k_work *item)
+{
+	printk("Send upload 2 is running\n");
+   	zcbor_state_t zse[2];
+	size_t payload_len;
+	static struct smp_buffer smp_cmd;
+
+	zcbor_new_encode_state(zse, ARRAY_SIZE(zse), smp_cmd.payload,
+			       sizeof(smp_cmd.payload), 0);
+
+	const struct device *flash_dev;
+	uint8_t data[UPLOAD_CHUNK+1];
+
+	flash_dev = device_get_binding("NRF_FLASH_DRV_NAME");
+	//TODO: Find some smarter ways to get these
+	int last_addr = 0xFBB68;
+	int start_addr = 0xf6000;
+	int curr_addr = 0xf6000;
+	//int curr_addr = 0xf6000;
+	static uint64_t image_length = 0x5B68; //last_addr - curr_addr;
+	int upload_chunk = UPLOAD_CHUNK;
+	int err;
+	while(curr_addr <last_addr){
+		//Wait until response is received until sending the next chunk
+		printk("Before upload semaphore\n");
+		k_sem_take(&upload_sem, K_FOREVER);
+		printk("After upload semaphore\n");
+		//If the whole binary is sent, then break this loop
+		
+		/**
+		 * UPLOAD_CHUNK = 3
+		 * curr_addr = 0
+		 * last_addr = 7 (should be the last byte to read (which is 'H' in our case))
+		 * upload_chunk = UPLOAD_CHUNK
+		 * Memory: ABC DEF GH
+		 * 
+		 * while(curr_addr =< last_addr)
+		 *     -Check if upload_chunk is larger than rest of mem to read
+		 *     -If it is, decrease upload_chunk
+		 *     -else, let upload_chunk = UPLOAD_CHUNK (propably not necessary)
+		 *     flash_read(curr_addr, upload_chunk)
+		 *     -Increase curr_addr by upload_chunk (the area just read)
+		 * 
+		 * 
+		**/ 
+
+		if(curr_addr+UPLOAD_CHUNK > last_addr){
+			upload_chunk = last_addr - curr_addr + 1;
+		}
+		printk("Uploading offset %x/%x and size %d\n", curr_addr,last_addr, upload_chunk);
+		err = flash_read(flash_dev, curr_addr, data, upload_chunk);
+		if (err != 0) {
+			printk("flash_read failed with error: %d\n", err);
+			return;
+		}
+
+		data[upload_chunk] = '\0';
+		printk("Sending bytes: 0x");
+		for(int x = 0;x < upload_chunk+1; x++){
+			printk("(%d)%x ",x,data[x]);
+		}
+		printk("\n");
+		bool decode_error = true;
+		/* Stop encoding on the error. */
+		zse->constant_state->stop_on_error = true;
+		printk("Image length: %d | 0x%x\n",image_length,image_length);
+		printk("Image offset: 0x%x\n", curr_addr - start_addr);
+		printk("Length of data: %d\n", strlen(data));
+		printk("Size of data: %d\n", sizeof(data)-1);
+		printk("Change\n");
+		printk("Decoding 1\n");
+		decode_error = zcbor_map_start_encode(zse, 20);
+		if(!decode_error){
+			printk("Decoding 2\n");
+		}else{
+			printk("ok\n");
+		}
+		decode_error = zcbor_tstr_put_lit(zse, "image");
+		if(!decode_error){
+			printk("Decoding 3\n");
+		}else{
+			printk("ok\n");
+		}
+		decode_error = zcbor_int64_put(zse, 0);
+		if(!decode_error){
+			printk("Decoding 4\n");
+		}else{
+			printk("ok\n");
+		}
+		decode_error = zcbor_tstr_put_lit(zse, "data");
+		if(!decode_error){
+			printk("Decoding 5\n");
+		}else{
+			printk("ok\n");
+		}
+		decode_error = zcbor_bstr_put_lit(zse, "12345");//data);
+		if(!decode_error){
+			printk("Decoding 6\n");
+		}else{
+			printk("ok\n");
+		}
+		decode_error = zcbor_tstr_put_lit(zse, "len");
+		if(!decode_error){
+			printk("Decoding 7\n");
+		}else{
+			printk("ok\n");
+		}
+		decode_error = zcbor_uint64_put(zse, (uint64_t)0x5B68);
+		if(!decode_error){
+			printk("Decoding 8\n");
+		}else{
+			printk("ok\n");
+		}
+		decode_error = zcbor_tstr_put_lit(zse, "off");
+		if(!decode_error){
+			printk("Decoding 9\n");
+		}else{
+			printk("ok\n");
+		}
+		decode_error = zcbor_uint64_put(zse, curr_addr - start_addr);
+		if(!decode_error){
+			printk("Decoding 10\n");
+		}else{
+			printk("ok\n");
+		}
+		decode_error = zcbor_tstr_put_lit(zse, "sha");
+		if(!decode_error){
+			printk("Decoding 11\n");
+		}else{
+			printk("ok\n");
+		}
+		decode_error = zcbor_bstr_put_lit(zse, "12345");
+		if(!decode_error){
+			printk("Decoding 12\n");
+		}else{
+			printk("ok\n");
+		}
+		decode_error = zcbor_tstr_put_lit(zse, "upgrade");
+		if(!decode_error){
+			printk("Decoding 13\n");
+		}else{
+			printk("ok\n");
+		}
+		decode_error = zcbor_bool_put(zse, false);
+		if(!decode_error){
+			printk("Decoding 14\n");
+		}else{
+			printk("ok\n");
+		}
+		zcbor_map_end_encode(zse, 20);
+
+		if (!zcbor_check_error(zse)) {
+			printk("Failed to encode SMP test packet, err: %d\n", zcbor_pop_error(zse));
+			return;
+		}else{
+			printk("Successfully encoded SMP test packet\n");
+		}
+		curr_addr+=upload_chunk;
+
+		/* Stop encoding on the error. */
+		/*zse->constant_state->stop_on_error = true;
+		zcbor_map_start_encode(zse, 20);
+		zcbor_tstr_put_lit(zse, "image");
+		zcbor_int64_put(zse, 0);
+		zcbor_tstr_put_lit(zse, "data");
+		zcbor_bstr_put_lit(zse, data);
+		zcbor_tstr_put_lit(zse, "len");
+		zcbor_uint64_put(zse, 100);//image_length); //This is only needed in first packet, where "off" is 0
+		zcbor_tstr_put_lit(zse, "off");
+		zcbor_uint64_put(zse, 0);//curr_addr);
+		zcbor_tstr_put_lit(zse, "sha");
+		zcbor_bstr_put_lit(zse, "12345");
+		zcbor_tstr_put_lit(zse, "upgrade");
+		zcbor_bool_put(zse, false);
+		zcbor_map_end_encode(zse, 20);
+
+		if (!zcbor_check_error(zse)) {
+			printk("1 Failed to encode SMP test packet, err: %d\n", zcbor_pop_error(zse));
+			return 50;
+		}*/
+		printk("zse->payload: %d\n", zse->payload);
+		printk("smp_cmd.payload: %d\n", smp_cmd.payload);
+
+		payload_len = (size_t)(zse->payload - smp_cmd.payload);
+
+		smp_cmd.header.op = 2; /* write request */
+		smp_cmd.header.flags = 0;
+		smp_cmd.header.len_h8 = (uint8_t)((payload_len >> 8) & 0xFF);
+		smp_cmd.header.len_l8 = (uint8_t)((payload_len >> 0) & 0xFF);
+		smp_cmd.header.group_h8 = 0;
+		smp_cmd.header.group_l8 = 1; /* IMAGE */
+		smp_cmd.header.seq = 0;
+		smp_cmd.header.id  = 1; /* UPLOAD */
+		printk("Total size of packet to send: %d\n", sizeof(smp_cmd.header) + payload_len);
+		printk("Header size: %d\n", sizeof(smp_cmd.header));
+		printk("Payload size: %d\n", payload_len);
+		err = bt_dfu_smp_command(&dfu_smp, smp_upload_rsp_proc,
+					sizeof(smp_cmd.header) + payload_len,
+					&smp_cmd);
+		if(err){
+			printk("bt_dfu_smp_command failed with %d\n", err);
+			return;
+		}
+	}
+}
+
+/*static int send_upload(struct bt_dfu_smp *dfu_smp)
 {
 	zcbor_state_t zse[2];
 	size_t payload_len;
@@ -509,23 +725,28 @@ static int send_upload(struct bt_dfu_smp *dfu_smp)
 	uint8_t data[UPLOAD_CHUNK];
 
 	flash_dev = device_get_binding("NRF_FLASH_DRV_NAME");
-	int last_addr = 0xFBB5E;
+	//TODO: Find some smarter ways to get these
+	int last_addr = 0xFBB68;
 	int curr_addr = 0xf6000;
+	int upload_chunk = UPLOAD_CHUNK;
 	while(curr_addr <=last_addr){
-		int err = flash_read(flash_dev, curr_addr, data, UPLOAD_CHUNK);
+
+		if(curr_addr+UPLOAD_CHUNK > last_addr){
+			upload_chunk = last_addr - curr_addr;
+		}
+		int err = flash_read(flash_dev, curr_addr, data, upload_chunk);
 		if (err != 0) {
 			printk("flash_read failed\n");
 			return err;
 		}
-		curr_addr+=UPLOAD_CHUNK;
-		
+		curr_addr+=upload_chunk;
 	}
 
 
 	data[IMAGE_HEADER_SIZE] = '\0';
 
 
-	/* Stop encoding on the error. */
+	
 	zse->constant_state->stop_on_error = true;
 	zcbor_map_start_encode(zse, 20);
 	zcbor_tstr_put_lit(zse, "image");
@@ -549,19 +770,19 @@ static int send_upload(struct bt_dfu_smp *dfu_smp)
 
 	payload_len = (size_t)(zse->payload - smp_cmd.payload);
 
-	smp_cmd.header.op = 2; /* write request */
+	smp_cmd.header.op = 2; 
 	smp_cmd.header.flags = 0;
 	smp_cmd.header.len_h8 = (uint8_t)((payload_len >> 8) & 0xFF);
 	smp_cmd.header.len_l8 = (uint8_t)((payload_len >> 0) & 0xFF);
 	smp_cmd.header.group_h8 = 0;
-	smp_cmd.header.group_l8 = 1; /* IMAGE */
+	smp_cmd.header.group_l8 = 1; 
 	smp_cmd.header.seq = 0;
-	smp_cmd.header.id  = 1; /* UPLOAD */
+	smp_cmd.header.id  = 1; 
 	
 	return bt_dfu_smp_command(dfu_smp, smp_upload_rsp_proc,
 				  sizeof(smp_cmd.header) + payload_len,
 				  &smp_cmd);
-}
+}*/
 
 static int send_smp_list(struct bt_dfu_smp *dfu_smp,
 			 const char *string)
@@ -689,10 +910,11 @@ static void button_upload(bool state)
 		printk("Upload command\n");
 		int ret;
 
-		ret = send_upload(&dfu_smp);
-		if (ret) {
+		//ret = send_upload(&dfu_smp);
+		k_work_submit(&upload_work_item);
+		/*if (ret) {
 			printk("Upload command send error (err: %d)\n", ret);
-		}
+		}*/
 	}
 }
 
@@ -733,6 +955,8 @@ void main(void)
 
 
 	printk("Starting Bluetooth Central SMP Client example\n");
+
+	k_work_init(&upload_work_item, send_upload2);
 
 	bt_dfu_smp_init(&dfu_smp, &init_params);
 
