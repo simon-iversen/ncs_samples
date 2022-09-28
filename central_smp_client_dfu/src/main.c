@@ -386,7 +386,7 @@ static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
 		zcbor_map_end_decode(zsd);
 		if (zcbor_check_error(zsd)) {
 			/* Print textual representation of the received CBOR map. */
-			printk("%s: %d\n", rc_key, rc_value);
+			//printk("%s: %d\n", rc_key, rc_value);
 			printk("%s: %d\n", off_key, off_val);
 		} else {
 			printk("Cannot print received image upload CBOR stream (err: %d)\n",
@@ -505,7 +505,7 @@ static void smp_echo_rsp_proc(struct bt_dfu_smp *dfu_smp)
 
 void send_upload2(struct k_work *item)
 {
-	printk("Send upload 2 is running\n");
+	//printk("Send upload 2 is running\n");
    	zcbor_state_t zse[2];
 	size_t payload_len;
 	
@@ -513,7 +513,7 @@ void send_upload2(struct k_work *item)
 	
 
 	const struct device *flash_dev;
-	uint8_t data[UPLOAD_CHUNK+1];
+	uint8_t data[UPLOAD_CHUNK+1]; // One more byte, to store '/0'
 
 	flash_dev = device_get_binding("NRF_FLASH_DRV_NAME");
 	//TODO: Find some smarter ways to get these
@@ -524,7 +524,8 @@ void send_upload2(struct k_work *item)
 	static uint64_t image_length = 0x5B68; //last_addr - curr_addr;
 	int upload_chunk = UPLOAD_CHUNK;
 	int err;
-	while(curr_addr <last_addr){
+	bool update_complete = false;
+	while(!update_complete){
 		struct smp_buffer smp_cmd;
 		zcbor_new_encode_state(zse, ARRAY_SIZE(zse), smp_cmd.payload,
 			       sizeof(smp_cmd.payload), 0);
@@ -533,7 +534,7 @@ void send_upload2(struct k_work *item)
 		k_sem_take(&upload_sem, K_FOREVER);
 		//printk("After upload semaphore\n");
 		//If the whole binary is sent, then break this loop
-		
+
 		/**
 		 * UPLOAD_CHUNK = 3
 		 * curr_addr = 0
@@ -552,9 +553,10 @@ void send_upload2(struct k_work *item)
 		**/ 
 
 		if(curr_addr+UPLOAD_CHUNK > last_addr){
-			upload_chunk = last_addr - curr_addr + 1;
+			upload_chunk = last_addr - curr_addr;
+			update_complete = true;
 		}
-		printk("Uploading offset %x/%x and size %d\n", curr_addr,last_addr, upload_chunk);
+		printk("Uploading offset %d/%d and size %d\n", curr_addr-start_addr,last_addr-start_addr, upload_chunk);
 		err = flash_read(flash_dev, curr_addr, data, upload_chunk);
 		if (err != 0) {
 			printk("flash_read failed with error: %d\n", err);
@@ -567,7 +569,6 @@ void send_upload2(struct k_work *item)
 			printk("(%d)%x ",x,data[x]);
 		}
 		printk("\n");*/
-		bool decode_error = true;
 		/* Stop encoding on the error. */
 		zse->constant_state->stop_on_error = true;
 		/*printk("Image length: %d | 0x%x\n",image_length,image_length);
@@ -594,8 +595,6 @@ void send_upload2(struct k_work *item)
 		if (!zcbor_check_error(zse)) {
 			printk("Failed to encode SMP test packet, err: %d\n", zcbor_pop_error(zse));
 			return;
-		}else{
-			printk("Successfully encoded SMP test packet\n");
 		}
 		curr_addr+=upload_chunk;
 
