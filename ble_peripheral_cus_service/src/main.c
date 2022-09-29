@@ -194,11 +194,18 @@ void main(void)
 
 	err = my_service_init();
 
+	#define BYTES_TO_SEND 30
+
+	uint8_t number_arr[BYTES_TO_SEND];
+	for(int x = 0; x< sizeof(number_arr); x++){
+		number_arr[x] = x;
+	}
+
 	for (;;) 
 	{
 		// Main loop
-		my_service_send(my_connection, (uint8_t *)&number, sizeof(number));
-		number++;
+		my_service_send(my_connection, number_arr, sizeof(number_arr));
+		number_arr[0]++;
 		k_sleep(K_MSEC(1000)); // 1000ms
 	}
 }
