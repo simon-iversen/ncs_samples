@@ -96,13 +96,9 @@ void on_cccd_changed(const struct bt_gatt_attr *attr, uint16_t value)
 /* LED Button Service Declaration and Registration */
 BT_GATT_SERVICE_DEFINE(my_service,
 BT_GATT_PRIMARY_SERVICE(BT_UUID_MY_SERVICE),
-BT_GATT_CHARACTERISTIC(BT_UUID_MY_SERVICE_RX,
-			       BT_GATT_CHRC_WRITE | BT_GATT_CHRC_WRITE_WITHOUT_RESP,
-			       BT_GATT_PERM_READ | BT_GATT_PERM_WRITE, 
-                   NULL, on_receive, NULL),
 BT_GATT_CHARACTERISTIC(BT_UUID_MY_SERVICE_TX,
-			       BT_GATT_CHRC_NOTIFY,
-			       BT_GATT_PERM_READ,
+			       BT_GATT_CHRC_NOTIFY | BT_GATT_CHRC_READ,
+			       BT_GATT_PERM_READ | BT_GATT_PERM_WRITE,
                    NULL, NULL, NULL),
 BT_GATT_CCC(on_cccd_changed,
         BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
@@ -118,7 +114,7 @@ void my_service_send(struct bt_conn *conn, const uint8_t *data, uint16_t len)
     to check whether notification has been enabled by the peer or not.
     Attribute table: 0 = Service, 1 = Primary service, 2 = RX, 3 = TX, 4 = CCC.
     */
-    const struct bt_gatt_attr *attr = &my_service.attrs[3]; 
+    const struct bt_gatt_attr *attr = &my_service.attrs[2]; 
 
     struct bt_gatt_notify_params params = 
     {
@@ -133,10 +129,12 @@ void my_service_send(struct bt_conn *conn, const uint8_t *data, uint16_t len)
     if(bt_gatt_is_subscribed(conn, attr, BT_GATT_CCC_NOTIFY)) 
     {
         // Send the notification
-	    if(bt_gatt_notify_cb(conn, &params))
-        {
-            printk("Error, unable to send notification\n");
+	    int err = bt_gatt_notify_cb(conn, &params);
+        if(err){
+            printk("Error, unable to send notification. Error %d\n", err);
         }
+            
+        
     }
     else
     {
