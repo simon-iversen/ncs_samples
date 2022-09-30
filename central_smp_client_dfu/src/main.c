@@ -473,7 +473,7 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 		} 
 		ok = zcbor_map_start_decode(zsd);
 		if (!ok) {
-			printk("Decoding error, start_decode images->list->map (err: %d)\n", zcbor_pop_error(zsd));
+			printk("Decoding error, start_decode images->list->map[0] (err: %d)\n", zcbor_pop_error(zsd));
 			return;
 		} 
 
@@ -622,6 +622,301 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 			return;
 		}
 		printk("Pending value: %s\n", pending_value?"true":"false");
+
+		//Decoding confirmed key
+		char confirmed_key[10];
+		ok = zcbor_tstr_decode(zsd, &value);
+		if (!ok) {
+			printk("Decoding error, confirmed key (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}  /*else if (value.len != 6) {
+			printk("Invalid data received (images key). Length %d is not equal 2\n", value.len);
+			return;
+		} else if(!strncmp(value.value, 'images', 6)){
+			printk("Invalid data received (images key). String '%.2s' is not equal to 'images'\n", value.value);
+			return;
+		}*/
+		memcpy(confirmed_key, value.value, value.len);
+		confirmed_key[value.len] = '\0';
+		printk("Confirmed key: %s\n",confirmed_key);
+
+		//Decoding confirmed value
+		bool confirmed_value;
+		confirmed_value = zcbor_bool_expect(zsd, true);
+		if (!zcbor_check_error(zsd)) {
+			printk("Decoding error, confirmed value (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}
+		printk("Confirmed value: %s\n", confirmed_value?"true":"false");
+
+		//Decoding active key
+		char active_key[10];
+		ok = zcbor_tstr_decode(zsd, &value);
+		if (!ok) {
+			printk("Decoding error, active key (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}  /*else if (value.len != 6) {
+			printk("Invalid data received (images key). Length %d is not equal 2\n", value.len);
+			return;
+		} else if(!strncmp(value.value, 'images', 6)){
+			printk("Invalid data received (images key). String '%.2s' is not equal to 'images'\n", value.value);
+			return;
+		}*/
+		memcpy(active_key, value.value, value.len);
+		active_key[value.len] = '\0';
+		printk("Active key: %s\n",active_key);
+
+		//Decoding active value
+		bool active_value;
+		active_value = zcbor_bool_expect(zsd, true);
+		if (!zcbor_check_error(zsd)) {
+			printk("Decoding error, active value (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}
+		printk("Active value: %s\n", active_value?"true":"false");
+
+		//Decoding permanent key
+		char permanent_key[10];
+		ok = zcbor_tstr_decode(zsd, &value);
+		if (!ok) {
+			printk("Decoding error, permanent key (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}  /*else if (value.len != 6) {
+			printk("Invalid data received (images key). Length %d is not equal 2\n", value.len);
+			return;
+		} else if(!strncmp(value.value, 'images', 6)){
+			printk("Invalid data received (images key). String '%.2s' is not equal to 'images'\n", value.value);
+			return;
+		}*/
+		memcpy(permanent_key, value.value, value.len);
+		permanent_key[value.len] = '\0';
+		printk("Permanent key: %s\n",permanent_key);
+
+		//Decoding permanent value
+		bool permanent_value;
+		permanent_value = zcbor_bool_expect(zsd, true);
+		if (!zcbor_check_error(zsd)) {
+			printk("Decoding error, permanent value (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}
+		printk("Permanent value: %s\n", permanent_value?"true":"false");
+
+
+		zcbor_map_end_decode(zsd);
+		ok = zcbor_map_start_decode(zsd);
+		if (!ok) {
+			printk("No secondary image present (err: %d)\n", zcbor_pop_error(zsd));
+			//return;
+		} else{
+			printk("Secondary image is present\n");
+		}
+				//Decoding slot key 
+		ok = zcbor_tstr_decode(zsd, &value);
+		if (!ok) {
+			printk("Decoding error, slot key (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}  /*else if (value.len != 6) {
+			printk("Invalid data received (images key). Length %d is not equal 2\n", value.len);
+			return;
+		} else if(!strncmp(value.value, 'images', 6)){
+			printk("Invalid data received (images key). String '%.2s' is not equal to 'images'\n", value.value);
+			return;
+		}*/
+		memcpy(slot_key, value.value, value.len);
+		slot_key[value.len] = '\0';
+		printk("Slot key: %s\n",slot_key);
+
+		//Decoding slot value
+		ok = zcbor_int32_decode(zsd, &slot_value);
+		if (!ok) {
+			printk("Decoding error, slot value (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}
+		printk("Slot value: %d\n",slot_value);
+
+		//Decoding version key
+		ok = zcbor_tstr_decode(zsd, &value);
+		if (!ok) {
+			printk("Decoding error, version key (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}  /*else if (value.len != 6) {
+			printk("Invalid data received (images key). Length %d is not equal 2\n", value.len);
+			return;
+		} else if(!strncmp(value.value, 'images', 6)){
+			printk("Invalid data received (images key). String '%.2s' is not equal to 'images'\n", value.value);
+			return;
+		}*/
+		memcpy(version_key, value.value, value.len);
+		version_key[value.len] = '\0';
+		printk("version key: %s\n",version_key);
+
+		//decoding version value
+		ok = zcbor_tstr_decode(zsd, &value);
+		if (!ok) {
+			printk("Decoding error, version value (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		} /*else if ((value.len != 3)) {
+			printk("Invalid data received (rc key). Length %d is not equal 3\n", value.len);
+			return;
+		}*/
+		memcpy(version_value, value.value, value.len);
+		version_value[value.len] = '\0';
+		printk("version value: %s\n",version_value);
+
+		//Decoding hash key
+		ok = zcbor_tstr_decode(zsd, &value);
+		if (!ok) {
+			printk("Decoding error, hash key (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}  /*else if (value.len != 6) {
+			printk("Invalid data received (images key). Length %d is not equal 2\n", value.len);
+			return;
+		} else if(!strncmp(value.value, 'images', 6)){
+			printk("Invalid data received (images key). String '%.2s' is not equal to 'images'\n", value.value);
+			return;
+		}*/
+		memcpy(hash_key, value.value, value.len);
+		hash_key[value.len] = '\0';
+		printk("hash key: %s\n",hash_key);
+
+		//decoding hash value
+		ok = zcbor_bstr_decode(zsd, &value);
+		if (!ok) {
+			printk("Decoding error, hash value (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		} /*else if ((value.len != 3)) {
+			printk("Invalid data received (rc key). Length %d is not equal 3\n", value.len);
+			return;
+		}*/
+		memcpy(hash_value, value.value, value.len);
+		hash_value[value.len] = '\0';
+		printk("Size of hash: %d\n", value.len);
+		printk("Hash value: 0x");
+		for(int x = 0; x< value.len;x++){
+			printk("%x", hash_value[x]);
+		}
+		printk("\n");
+
+		//Decoding bootable key
+		ok = zcbor_tstr_decode(zsd, &value);
+		if (!ok) {
+			printk("Decoding error, hash key (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}  /*else if (value.len != 6) {
+			printk("Invalid data received (images key). Length %d is not equal 2\n", value.len);
+			return;
+		} else if(!strncmp(value.value, 'images', 6)){
+			printk("Invalid data received (images key). String '%.2s' is not equal to 'images'\n", value.value);
+			return;
+		}*/
+		memcpy(bootable_key, value.value, value.len);
+		bootable_key[value.len] = '\0';
+		printk("bootable key: %s\n",bootable_key);
+
+		//Decoding bootable value
+		bootable_value = zcbor_bool_expect(zsd, true);
+		if (!zcbor_check_error(zsd)) {
+			printk("Decoding error, bootable value (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}
+		printk("Bootable value: %s\n", bootable_value?"true":"false");
+
+		//Decoding pending key
+		ok = zcbor_tstr_decode(zsd, &value);
+		if (!ok) {
+			printk("Decoding error, pending key (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}  /*else if (value.len != 6) {
+			printk("Invalid data received (images key). Length %d is not equal 2\n", value.len);
+			return;
+		} else if(!strncmp(value.value, 'images', 6)){
+			printk("Invalid data received (images key). String '%.2s' is not equal to 'images'\n", value.value);
+			return;
+		}*/
+		memcpy(pending_key, value.value, value.len);
+		pending_key[value.len] = '\0';
+		printk("pending key: %s\n",pending_key);
+
+		//Decoding pending value
+		pending_value = zcbor_bool_expect(zsd, true);
+		if (!zcbor_check_error(zsd)) {
+			printk("Decoding error, pending value (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}
+		printk("Pending value: %s\n", pending_value?"true":"false");
+
+		//Decoding confirmed key
+		ok = zcbor_tstr_decode(zsd, &value);
+		if (!ok) {
+			printk("Decoding error, confirmed key (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}  /*else if (value.len != 6) {
+			printk("Invalid data received (images key). Length %d is not equal 2\n", value.len);
+			return;
+		} else if(!strncmp(value.value, 'images', 6)){
+			printk("Invalid data received (images key). String '%.2s' is not equal to 'images'\n", value.value);
+			return;
+		}*/
+		memcpy(confirmed_key, value.value, value.len);
+		confirmed_key[value.len] = '\0';
+		printk("Confirmed key: %s\n",confirmed_key);
+
+		//Decoding confirmed value
+		confirmed_value = zcbor_bool_expect(zsd, true);
+		if (!zcbor_check_error(zsd)) {
+			printk("Decoding error, confirmed value (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}
+		printk("Confirmed value: %s\n", confirmed_value?"true":"false");
+
+		//Decoding active key
+		ok = zcbor_tstr_decode(zsd, &value);
+		if (!ok) {
+			printk("Decoding error, active key (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}  /*else if (value.len != 6) {
+			printk("Invalid data received (images key). Length %d is not equal 2\n", value.len);
+			return;
+		} else if(!strncmp(value.value, 'images', 6)){
+			printk("Invalid data received (images key). String '%.2s' is not equal to 'images'\n", value.value);
+			return;
+		}*/
+		memcpy(active_key, value.value, value.len);
+		active_key[value.len] = '\0';
+		printk("Active key: %s\n",active_key);
+
+		//Decoding active value
+		active_value = zcbor_bool_expect(zsd, true);
+		if (!zcbor_check_error(zsd)) {
+			printk("Decoding error, active value (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}
+		printk("Active value: %s\n", active_value?"true":"false");
+
+		//Decoding permanent key
+		ok = zcbor_tstr_decode(zsd, &value);
+		if (!ok) {
+			printk("Decoding error, permanent key (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}  /*else if (value.len != 6) {
+			printk("Invalid data received (images key). Length %d is not equal 2\n", value.len);
+			return;
+		} else if(!strncmp(value.value, 'images', 6)){
+			printk("Invalid data received (images key). String '%.2s' is not equal to 'images'\n", value.value);
+			return;
+		}*/
+		memcpy(permanent_key, value.value, value.len);
+		permanent_key[value.len] = '\0';
+		printk("Permanent key: %s\n",permanent_key);
+
+		//Decoding permanent value
+		permanent_value = zcbor_bool_expect(zsd, true);
+		if (!zcbor_check_error(zsd)) {
+			printk("Decoding error, permanent value (err: %d)\n", zcbor_pop_error(zsd));
+			return;
+		}
+		printk("Permanent value: %s\n", permanent_value?"true":"false");
+
 
 
 		zcbor_map_end_decode(zsd);
