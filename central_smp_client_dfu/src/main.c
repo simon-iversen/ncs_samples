@@ -281,7 +281,6 @@ static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
 	const struct bt_dfu_smp_rsp_state *rsp_state;
 
 	rsp_state = bt_dfu_smp_rsp_state(dfu_smp);
-	//printk("Upload response part received, size: %zu.\n",rsp_state->chunk_size);
 
 	if (rsp_state->offset + rsp_state->chunk_size > sizeof(smp_rsp_buff)) {
 		printk("Response size buffer overflow\n");
@@ -370,11 +369,6 @@ static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
 			printk("Invalid data received (rc key). Length %d is not equal 3\n", value.len);
 			return;
 		}
-		//TODO: The below throws a BUS FAULT. Look into it.
-		/* else if(!strncmp(value.value, 'off', 3)){
-			printk("Invalid data received (offset key). String '%.3s' is not equal to 'off'\n", value.value);
-			return;
-		}*/
 
 		memcpy(off_key, value.value, value.len);
 		off_key[value.len] = '\0';
@@ -399,7 +393,6 @@ static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
 
 static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 {
-	printk("List response callback running\n");
 	uint8_t *p_outdata = (uint8_t *)(&smp_rsp_buff);
 	const struct bt_dfu_smp_rsp_state *rsp_state;
 
@@ -711,7 +704,7 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 		} else{
 			printk("Secondary image is present\n");
 		}
-				//Decoding slot key 
+		//Decoding slot key 
 		ok = zcbor_tstr_decode(zsd, &value);
 		if (!ok) {
 			printk("Decoding error, slot key (err: %d)\n", zcbor_pop_error(zsd));
@@ -1049,7 +1042,6 @@ static void progress_print(size_t downloaded, size_t file_size)
 
 void send_upload2(struct k_work *item)
 {
-	//printk("Send upload 2 is running\n");
    	zcbor_state_t zse[2];
 	size_t payload_len;
 	
@@ -1064,8 +1056,7 @@ void send_upload2(struct k_work *item)
 	int last_addr = 0xFBB68;
 	int start_addr = 0xf6000;
 	int curr_addr = 0xf6000;
-	//int curr_addr = 0xf6000;
-	static uint64_t image_length = 0x5B68; //last_addr - curr_addr;
+	static uint64_t image_length = 0x5B68;
 	int upload_chunk = UPLOAD_CHUNK;
 	int err;
 	bool update_complete = false;
@@ -1074,34 +1065,13 @@ void send_upload2(struct k_work *item)
 		zcbor_new_encode_state(zse, ARRAY_SIZE(zse), smp_cmd.payload,
 			       sizeof(smp_cmd.payload), 0);
 		//Wait until response is received until sending the next chunk
-		//printk("Before upload semaphore\n");
 		k_sem_take(&upload_sem, K_FOREVER);
-		//printk("After upload semaphore\n");
-		//If the whole binary is sent, then break this loop
-
-		/**
-		 * UPLOAD_CHUNK = 3
-		 * curr_addr = 0
-		 * last_addr = 7 (should be the last byte to read (which is 'H' in our case))
-		 * upload_chunk = UPLOAD_CHUNK
-		 * Memory: ABC DEF GH
-		 * 
-		 * while(curr_addr =< last_addr)
-		 *     -Check if upload_chunk is larger than rest of mem to read
-		 *     -If it is, decrease upload_chunk
-		 *     -else, let upload_chunk = UPLOAD_CHUNK (propably not necessary)
-		 *     flash_read(curr_addr, upload_chunk)
-		 *     -Increase curr_addr by upload_chunk (the area just read)
-		 * 
-		 * 
-		**/ 
 
 		if(curr_addr+UPLOAD_CHUNK > last_addr){
 			upload_chunk = last_addr - curr_addr;
 			update_complete = true;
 		}
 		progress_print(curr_addr-start_addr, last_addr-start_addr);
-		//printk("Uploading offset %d/%d and size %d\n", curr_addr-start_addr,last_addr-start_addr, upload_chunk);
 		err = flash_read(flash_dev, curr_addr, data, upload_chunk);
 		if (err != 0) {
 			printk("flash_read failed with error: %d\n", err);
@@ -1109,19 +1079,7 @@ void send_upload2(struct k_work *item)
 		}
 
 		data[upload_chunk] = '\0';
-		/*printk("Sending bytes: 0x");
-		for(int x = 0;x < upload_chunk+1; x++){
-			printk("(%d)%x ",x,data[x]);
-		}
-		printk("\n");*/
-		/* Stop encoding on the error. */
 		zse->constant_state->stop_on_error = true;
-		/*printk("Image length: %d | 0x%x\n",image_length,image_length);
-		printk("Image offset: 0x%x\n", curr_addr - start_addr);
-		printk("Length of data: %d\n", strlen(data));
-		printk("Size of data: %d\n", sizeof(data)-1);
-		printk("Change\n");
-		printk("Decoding 1\n");*/
 		zcbor_map_start_encode(zse, 20);
 		zcbor_tstr_put_lit(zse, "image");
 		zcbor_int64_put(zse, 0);
@@ -1143,30 +1101,6 @@ void send_upload2(struct k_work *item)
 		}
 		curr_addr+=upload_chunk;
 
-		/* Stop encoding on the error. */
-		/*zse->constant_state->stop_on_error = true;
-		zcbor_map_start_encode(zse, 20);
-		zcbor_tstr_put_lit(zse, "image");
-		zcbor_int64_put(zse, 0);
-		zcbor_tstr_put_lit(zse, "data");
-		zcbor_bstr_put_lit(zse, data);
-		zcbor_tstr_put_lit(zse, "len");
-		zcbor_uint64_put(zse, 100);//image_length); //This is only needed in first packet, where "off" is 0
-		zcbor_tstr_put_lit(zse, "off");
-		zcbor_uint64_put(zse, 0);//curr_addr);
-		zcbor_tstr_put_lit(zse, "sha");
-		zcbor_bstr_put_lit(zse, "12345");
-		zcbor_tstr_put_lit(zse, "upgrade");
-		zcbor_bool_put(zse, false);
-		zcbor_map_end_encode(zse, 20);
-
-		if (!zcbor_check_error(zse)) {
-			printk("1 Failed to encode SMP test packet, err: %d\n", zcbor_pop_error(zse));
-			return 50;
-		}*/
-		//printk("zse->payload: %d\n", zse->payload);
-		//printk("smp_cmd.payload: %d\n", smp_cmd.payload);
-
 		payload_len = (size_t)(zse->payload - smp_cmd.payload);
 
 		smp_cmd.header.op = 2; /* write request */
@@ -1177,9 +1111,7 @@ void send_upload2(struct k_work *item)
 		smp_cmd.header.group_l8 = 1; /* IMAGE */
 		smp_cmd.header.seq = 0;
 		smp_cmd.header.id  = 1; /* UPLOAD */
-		/*printk("Total size of packet to send: %d\n", sizeof(smp_cmd.header) + payload_len);
-		printk("Header size: %d\n", sizeof(smp_cmd.header));
-		printk("Payload size: %d\n", payload_len);*/
+
 		err = bt_dfu_smp_command(&dfu_smp, smp_upload_rsp_proc,
 					sizeof(smp_cmd.header) + payload_len,
 					&smp_cmd);
@@ -1195,34 +1127,16 @@ static int send_smp_list(struct bt_dfu_smp *dfu_smp)
 	static struct smp_buffer smp_cmd;
 	zcbor_state_t zse[CBOR_ENCODER_STATE_NUM];
 	size_t payload_len;
-	printk("send_smp_list\n");
-	/*zcbor_new_encode_state(zse, ARRAY_SIZE(zse), smp_cmd.payload,
-			       sizeof(smp_cmd.payload), 0);
-
-	// Stop encoding on the error. 
-	zse->constant_state->stop_on_error = true;
-
-	zcbor_map_start_encode(zse, CBOR_MAP_MAX_ELEMENT_CNT);
-	zcbor_tstr_put_lit(zse, "d");
-	zcbor_tstr_put_term(zse, "sdf");
-	zcbor_map_end_encode(zse, CBOR_MAP_MAX_ELEMENT_CNT);
-
-	if (!zcbor_check_error(zse)) {
-		printk("Failed to encode SMP list packet, err: %d\n", zcbor_pop_error(zse));
-		return -EFAULT;
-	}*/
 
 	payload_len = (size_t)(zse->payload);
-	printk("Before setting header in spm list\n");
 	smp_cmd.header.op = 0; /* read request */
 	smp_cmd.header.flags = 0;
-	smp_cmd.header.len_h8 = 0;//(uint8_t)((payload_len >> 8) & 0xFF);
-	smp_cmd.header.len_l8 = 0;//(uint8_t)((payload_len >> 0) & 0xFF);
+	smp_cmd.header.len_h8 = 0;
+	smp_cmd.header.len_l8 = 0;
 	smp_cmd.header.group_h8 = 0;
 	smp_cmd.header.group_l8 = 1; /* IMAGE */
 	smp_cmd.header.seq = 0;
 	smp_cmd.header.id  = 0; /* LIST */
-	printk("Before running bt_dfu_smp in send_smp_list\n");
 	return bt_dfu_smp_command(dfu_smp, smp_list_rsp_proc,
 				  sizeof(smp_cmd.header),
 				  &smp_cmd);
@@ -1248,7 +1162,7 @@ static int send_smp_reset(struct bt_dfu_smp *dfu_smp,
 	zcbor_map_end_encode(zse, CBOR_MAP_MAX_ELEMENT_CNT);
 
 	if (!zcbor_check_error(zse)) {
-		printk("Failed to encode SMP echo packet, err: %d\n", zcbor_pop_error(zse));
+		printk("Failed to encode SMP reset packet, err: %d\n", zcbor_pop_error(zse));
 		return -EFAULT;
 	}
 
@@ -1256,8 +1170,8 @@ static int send_smp_reset(struct bt_dfu_smp *dfu_smp,
 
 	smp_cmd.header.op = 2; /* Write */
 	smp_cmd.header.flags = 0;
-	smp_cmd.header.len_h8 = 0;//(uint8_t)((payload_len >> 8) & 0xFF);
-	smp_cmd.header.len_l8 = 0;//(uint8_t)((payload_len >> 0) & 0xFF);
+	smp_cmd.header.len_h8 = 0;
+	smp_cmd.header.len_l8 = 0;
 	smp_cmd.header.group_h8 = 0;
 	smp_cmd.header.group_l8 = 0; /* OS */
 	smp_cmd.header.seq = 0;
@@ -1290,7 +1204,7 @@ static int send_smp_test(struct bt_dfu_smp *dfu_smp)
 	zcbor_map_end_encode(zse, CBOR_MAP_MAX_ELEMENT_CNT);
 
 	if (!zcbor_check_error(zse)) {
-		printk("Failed to encode SMP echo packet, err: %d\n", zcbor_pop_error(zse));
+		printk("Failed to encode SMP test packet, err: %d\n", zcbor_pop_error(zse));
 		return -EFAULT;
 	}
 
@@ -1354,7 +1268,6 @@ static void button_upload(bool state)
 {
 	
 	if (state) {
-		printk("Upload command\n");
 		int ret;
 
 		k_work_submit(&upload_work_item);
@@ -1366,11 +1279,10 @@ static void button_test(bool state)
 {
 	
 	if (state) {
-		printk("Test command\n");
 		int ret;
 		ret = send_smp_test(&dfu_smp);
 		if (ret) {
-			printk("Echo command send error (err: %d)\n", ret);
+			printk("Test command send error (err: %d)\n", ret);
 		}
 		
 
@@ -1402,7 +1314,7 @@ static void button_image_list(bool state)
 
 		ret = send_smp_list(&dfu_smp);
 		if (ret) {
-			printk("Echo command send error (err: %d)\n", ret);
+			printk("Image list command send error (err: %d)\n", ret);
 		}
 	}
 }
@@ -1410,7 +1322,6 @@ static void button_image_list(bool state)
 
 static void button_handler(uint32_t button_state, uint32_t has_changed)
 {
-	printk("Button handler\n");
 	if (has_changed & KEY_ECHO_MASK) {
 		button_image_list(button_state & KEY_ECHO_MASK);
 	}
@@ -1418,7 +1329,6 @@ static void button_handler(uint32_t button_state, uint32_t has_changed)
 		button_upload(button_state & KEY_RESET_MASK);
 	}
 	if(has_changed & KEY_TEST_MASK){
-		printk("Button test\n");
 		button_test(button_state & KEY_TEST_MASK);
 	}
 }
