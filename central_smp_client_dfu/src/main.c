@@ -388,8 +388,6 @@ static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
 		}
 		zcbor_map_end_decode(zsd);
 		if (zcbor_check_error(zsd)) {
-			/* Print textual representation of the received CBOR map. */
-			//printk("%s: %d\n", rc_key, rc_value);
 			printk("%s: %d\n", off_key, off_val);
 		} else {
 			printk("Cannot print received image upload CBOR stream (err: %d)\n",
@@ -1030,6 +1028,22 @@ static void smp_echo_rsp_proc(struct bt_dfu_smp *dfu_smp)
 	}
 
 }
+#define PROGRESS_WIDTH 50
+static void progress_print(size_t downloaded, size_t file_size)
+{
+	const int percent = (downloaded * 100) / file_size;
+	size_t lpad = (percent * PROGRESS_WIDTH) / 100;
+	size_t rpad = PROGRESS_WIDTH - lpad;
+
+	printk("\r[ %3d%% ] |", percent);
+	for (size_t i = 0; i < lpad; i++) {
+		printk("=");
+	}
+	for (size_t i = 0; i < rpad; i++) {
+		printk(" ");
+	}
+	printk("| (%d/%d bytes)", downloaded, file_size);
+}
 
 #define UPLOAD_CHUNK		50 //This has to be at least 32 bytes, since first it has to send the whole header (which is 32 bytes)
 
@@ -1086,7 +1100,8 @@ void send_upload2(struct k_work *item)
 			upload_chunk = last_addr - curr_addr;
 			update_complete = true;
 		}
-		printk("Uploading offset %d/%d and size %d\n", curr_addr-start_addr,last_addr-start_addr, upload_chunk);
+		progress_print(curr_addr-start_addr, last_addr-start_addr);
+		//printk("Uploading offset %d/%d and size %d\n", curr_addr-start_addr,last_addr-start_addr, upload_chunk);
 		err = flash_read(flash_dev, curr_addr, data, upload_chunk);
 		if (err != 0) {
 			printk("flash_read failed with error: %d\n", err);
