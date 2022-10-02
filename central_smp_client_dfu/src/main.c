@@ -407,28 +407,21 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 		       rsp_state->chunk_size);
 	}
 	if (bt_dfu_smp_rsp_total_check(dfu_smp)) {
-		printk("All parts received\n");
 		if (smp_rsp_buff.header.op != 1 && smp_rsp_buff.header.op != 3 ) {
 			printk("Unexpected operation code (%u)!\n",
 			       smp_rsp_buff.header.op);
 			return;
-		}else{
-			printk("Operation codr correct (read rsp)\n");
 		}
 		uint16_t group = ((uint16_t)smp_rsp_buff.header.group_h8) << 8 |
 				      smp_rsp_buff.header.group_l8;
 		if (group != 1 /* Application/software image management group */) {
 			printk("Unexpected command group (%u)!\n", group);
 			return;
-		}else{
-			printk("group correct (appl/image mngmt group)\n");
 		}
 		if (smp_rsp_buff.header.id != 0 /* STATE */) {
 			printk("Unexpected command (%u)",
 			       smp_rsp_buff.header.id);
 			return;
-		}else{
-			printk("command ID correct (state)\n");
 		}
 		size_t payload_len = ((uint16_t)smp_rsp_buff.header.len_h8) << 8 |
 				      smp_rsp_buff.header.len_l8;
@@ -459,7 +452,7 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 		}*/
 		memcpy(images_key, value.value, value.len);
 		images_key[value.len] = '\0';
-		printk("Images key: %s\n",images_key);
+		//printk("Images key: %s\n",images_key);
 		ok = zcbor_list_start_decode(zsd);
 		if (!ok) {
 			printk("Decoding error, start_decode images->list  (err: %d)\n", zcbor_pop_error(zsd));
@@ -469,17 +462,20 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 		
 		for(int slot=0; slot<2;slot++){
 			ok = zcbor_map_start_decode(zsd);
-			if (!ok) {memcpy(hash_value_secondary_slot, value.value, value.len);
+			if (!ok) {
 				if(slot == 0){
 					printk("Error decoding slot 0. Err: %d", zcbor_pop_error(zsd));
 				}else if(slot == 1){
-					printk("No secondary image present (err: %d)\n", zcbor_pop_error(zsd));
+					//printk("No secondary image present\n");
+					break;
 				}
 			} 
 			if(slot==0){
-				printk("-----------PRIMARY IMAGE-----------");
+				printk("\n-----------PRIMARY IMAGE-----------\n");
+			}else if(slot == 1){
+				printk("\n-----------SECONDARY IMAGE-----------\n");
 			}
-
+			
 			//Decoding slot key 
 			char slot_key[5];
 			ok = zcbor_tstr_decode(zsd, &value);
@@ -565,9 +561,11 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 				return;
 			}*/
 			memcpy(hash_value, value.value, value.len);
+			if(slot == 1){
+				memcpy(hash_value_secondary_slot, value.value, value.len);
+			}
 			hash_value[value.len] = '\0';
-			printk("Size of hash: %d\n", value.len);
-			printk("Hash value: 0x");
+			printk("      %s: 0x", hash_key);
 			for(int x = 0; x< value.len;x++){
 				printk("%x", hash_value[x]);
 			}
@@ -588,7 +586,7 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 			}*/
 			memcpy(bootable_key, value.value, value.len);
 			bootable_key[value.len] = '\0';
-			printk("bootable key: %s\n",bootable_key);
+			//printk("bootable key: %s\n",bootable_key);
 
 			//Decoding bootable value
 			bool bootable_value;
@@ -597,7 +595,7 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 				printk("Decoding error, bootable value (err: %d)\n", zcbor_pop_error(zsd));
 				return;
 			}
-			printk("Bootable value: %s\n", bootable_value?"true":"false");
+			printk("      %s: %s\n",bootable_key, bootable_value?"true":"false");
 
 			//Decoding pending key
 			char pending_key[10];
@@ -614,7 +612,7 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 			}*/
 			memcpy(pending_key, value.value, value.len);
 			pending_key[value.len] = '\0';
-			printk("pending key: %s\n",pending_key);
+			//printk("pending key: %s\n",pending_key);
 
 			//Decoding pending value
 			bool pending_value;
@@ -623,7 +621,7 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 				printk("Decoding error, pending value (err: %d)\n", zcbor_pop_error(zsd));
 				return;
 			}
-			printk("Pending value: %s\n", pending_value?"true":"false");
+			printk("      %s: %s\n",pending_key, pending_value?"true":"false");
 
 			//Decoding confirmed key
 			char confirmed_key[10];
@@ -640,7 +638,7 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 			}*/
 			memcpy(confirmed_key, value.value, value.len);
 			confirmed_key[value.len] = '\0';
-			printk("Confirmed key: %s\n",confirmed_key);
+			//printk("Confirmed key: %s\n",confirmed_key);
 
 			//Decoding confirmed value
 			bool confirmed_value;
@@ -649,7 +647,7 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 				printk("Decoding error, confirmed value (err: %d)\n", zcbor_pop_error(zsd));
 				return;
 			}
-			printk("Confirmed value: %s\n", confirmed_value?"true":"false");
+			printk("      %s: %s\n",confirmed_key, confirmed_value?"true":"false");
 
 			//Decoding active key
 			char active_key[10];
@@ -666,7 +664,7 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 			}*/
 			memcpy(active_key, value.value, value.len);
 			active_key[value.len] = '\0';
-			printk("Active key: %s\n",active_key);
+			//printk("Active key: %s\n",active_key);
 
 			//Decoding active value
 			bool active_value;
@@ -675,7 +673,7 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 				printk("Decoding error, active value (err: %d)\n", zcbor_pop_error(zsd));
 				return;
 			}
-			printk("Active value: %s\n", active_value?"true":"false");
+			printk("      %s: %s\n",active_key, active_value?"true":"false");
 
 			//Decoding permanent key
 			char permanent_key[10];
@@ -692,7 +690,7 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 			}*/
 			memcpy(permanent_key, value.value, value.len);
 			permanent_key[value.len] = '\0';
-			printk("Permanent key: %s\n",permanent_key);
+			//printk("Permanent key: %s\n",permanent_key);
 
 			//Decoding permanent value
 			bool permanent_value;
@@ -701,7 +699,7 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 				printk("Decoding error, permanent value (err: %d)\n", zcbor_pop_error(zsd));
 				return;
 			}
-			printk("Permanent value: %s\n", permanent_value?"true":"false");
+			printk("      %s: %s\n",permanent_key, permanent_value?"true":"false");
 
 
 			zcbor_map_end_decode(zsd);
@@ -711,8 +709,6 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 		zcbor_map_end_decode(zsd);
 
 
-	}else{
-		printk("All parts not received\n");
 	}
 }
 
@@ -832,7 +828,6 @@ static void progress_print(size_t downloaded, size_t file_size)
 }
 
 #define UPLOAD_CHUNK		50 //This has to be at least 32 bytes, since first it has to send the whole header (which is 32 bytes)
-
 void send_upload2(struct k_work *item)
 {
    	zcbor_state_t zse[2];
@@ -846,10 +841,9 @@ void send_upload2(struct k_work *item)
 
 	flash_dev = device_get_binding("NRF_FLASH_DRV_NAME");
 	//TODO: Find some smarter ways to get these
-	int last_addr = 0xFBB68;
-	int start_addr = 0xf6000;
-	int curr_addr = 0xf6000;
-	static uint64_t image_length = 0x5B68;
+	int last_addr = 0x86500; //FBB66
+	int start_addr = 0x50000;
+	int curr_addr = 0x50000;
 	int upload_chunk = UPLOAD_CHUNK;
 	int err;
 	bool update_complete = false;
@@ -1124,6 +1118,9 @@ static void button_handler(uint32_t button_state, uint32_t has_changed)
 	if(has_changed & KEY_TEST_MASK){
 		button_test(button_state & KEY_TEST_MASK);
 	}
+	/*if(has_changed & KEY_RESET_MASK){
+		button_reset(button_state & KEY_RESET_MASK);
+	}*/
 }
 
 

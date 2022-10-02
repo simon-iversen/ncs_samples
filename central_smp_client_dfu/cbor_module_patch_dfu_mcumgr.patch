@@ -6,7 +6,7 @@ index 09c3aa4..ece1466 100644
  	}
  
  	if (value != result) {
--		ERR_RESTORE(ZCBOR_ERR_WRONG_VALUE);
+-		ERNG_R_RESTORE(ZCBOR_ERR_WROVALUE);
 +		return false;
 +		//ERR_RESTORE(ZCBOR_ERR_WRONG_VALUE);
  	}
