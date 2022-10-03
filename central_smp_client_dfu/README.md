@@ -1,4 +1,5 @@
 # Bluetooth: Central SMP Client DFU
+With this sample you will be able to perform a DFU from one nRF52840DK to another nRF52840DK
 
 ## Requirements
 This sample is tested with two nRF52840DK's and NCS v2.0.0
