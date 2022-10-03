@@ -4,4 +4,4 @@ custom_storage:
     before:
     - end
   region: flash_primary
-  size: 0x56000
+  size: 0xB0000

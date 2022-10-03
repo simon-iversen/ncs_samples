@@ -44,9 +44,10 @@
 #define SMP_ECHO_MAP_KEY_MAX_LEN 2
 #define SMP_ECHO_MAP_VALUE_MAX_LEN 30
 
-#define KEY_ECHO_MASK  DK_BTN1_MSK
-#define KEY_RESET_MASK  DK_BTN2_MSK
+#define KEY_LIST_MASK  DK_BTN1_MSK
+#define KEY_UPLOAD_MASK  DK_BTN2_MSK
 #define KEY_TEST_MASK  DK_BTN3_MSK
+#define KEY_CONFIRM_MASK  DK_BTN4_MSK
 
 static struct bt_conn *default_conn;
 static struct bt_dfu_smp dfu_smp;
@@ -64,6 +65,7 @@ struct smp_buffer {
 static struct smp_buffer smp_rsp_buff;
 
 static char hash_value_secondary_slot[33];
+static char hash_value_primary_slot[33];
 
 
 static void scan_filter_match(struct bt_scan_device_info *device_info,
@@ -382,7 +384,8 @@ static void smp_upload_rsp_proc(struct bt_dfu_smp *dfu_smp)
 		}
 		zcbor_map_end_decode(zsd);
 		if (zcbor_check_error(zsd)) {
-			printk("%s: %d\n", off_key, off_val);
+			//printk("%s: %d\n", off_key, off_val);
+			//do nothing
 		} else {
 			printk("Cannot print received image upload CBOR stream (err: %d)\n",
 					zcbor_pop_error(zsd));
@@ -561,7 +564,10 @@ static void smp_list_rsp_proc(struct bt_dfu_smp *dfu_smp)
 				return;
 			}*/
 			memcpy(hash_value, value.value, value.len);
-			if(slot == 1){
+			if(slot == 0){
+				memcpy(hash_value_primary_slot, value.value, value.len);
+			}
+			else if(slot == 1){
 				memcpy(hash_value_secondary_slot, value.value, value.len);
 			}
 			hash_value[value.len] = '\0';
@@ -969,6 +975,48 @@ static int send_smp_reset(struct bt_dfu_smp *dfu_smp,
 				  &smp_cmd);
 }
 
+static int send_smp_confirm(struct bt_dfu_smp *dfu_smp)
+{
+	static struct smp_buffer smp_cmd;
+	zcbor_state_t zse[CBOR_ENCODER_STATE_NUM];
+	size_t payload_len;
+
+	zcbor_new_encode_state(zse, ARRAY_SIZE(zse), smp_cmd.payload,
+			       sizeof(smp_cmd.payload), 0);
+
+	/* Stop encoding on the error. */
+	zse->constant_state->stop_on_error = true;
+
+	zcbor_map_start_encode(zse, CBOR_MAP_MAX_ELEMENT_CNT);
+	zcbor_tstr_put_lit(zse, "hash");
+	zcbor_bstr_put_lit(zse, hash_value_secondary_slot);
+	zcbor_tstr_put_lit(zse, "confirm");
+	zcbor_bool_put(zse, true);
+	
+	zcbor_map_end_encode(zse, CBOR_MAP_MAX_ELEMENT_CNT);
+
+	if (!zcbor_check_error(zse)) {
+		printk("Failed to encode SMP confirm packet, err: %d\n", zcbor_pop_error(zse));
+		return -EFAULT;
+	}
+
+	payload_len = (size_t)(zse->payload - smp_cmd.payload);
+
+	smp_cmd.header.op = 2; /* Write */
+	smp_cmd.header.flags = 0;
+	smp_cmd.header.len_h8 = (uint8_t)((payload_len >> 8) & 0xFF);
+	smp_cmd.header.len_l8 = (uint8_t)((payload_len >> 0) & 0xFF);
+	smp_cmd.header.group_h8 = 0;
+	smp_cmd.header.group_l8 = 1; /* app/image */
+	smp_cmd.header.seq = 0;
+	smp_cmd.header.id  = 0; /* ECHO */
+
+	// confirm has same response as list command
+	return bt_dfu_smp_command(dfu_smp, smp_list_rsp_proc,
+				  sizeof(smp_cmd.header) + payload_len,
+				  &smp_cmd);
+}
+
 
 static int send_smp_test(struct bt_dfu_smp *dfu_smp)
 {
@@ -1062,6 +1110,21 @@ static void button_upload(bool state)
 	}
 }
 
+
+static void button_confirm(bool state)
+{
+	
+	if (state) {
+		int ret;
+		ret = send_smp_confirm(&dfu_smp);
+		if (ret) {
+			printk("Confirm command send error (err: %d)\n", ret);
+		}
+		
+
+	}
+}
+
 static void button_test(bool state)
 {
 	
@@ -1109,18 +1172,19 @@ static void button_image_list(bool state)
 
 static void button_handler(uint32_t button_state, uint32_t has_changed)
 {
-	if (has_changed & KEY_ECHO_MASK) {
-		button_image_list(button_state & KEY_ECHO_MASK);
+	if (has_changed & KEY_LIST_MASK) {
+		button_image_list(button_state & KEY_LIST_MASK);
 	}
-	if(has_changed & KEY_RESET_MASK){
-		button_upload(button_state & KEY_RESET_MASK);
+	if(has_changed & KEY_UPLOAD_MASK){
+		button_upload(button_state & KEY_UPLOAD_MASK);
 	}
 	if(has_changed & KEY_TEST_MASK){
 		button_test(button_state & KEY_TEST_MASK);
 	}
-	/*if(has_changed & KEY_RESET_MASK){
-		button_reset(button_state & KEY_RESET_MASK);
-	}*/
+	if(has_changed & KEY_CONFIRM_MASK){
+		button_confirm(button_state & KEY_CONFIRM_MASK);
+	}
+	//No more buttons for reset
 }
 
 
