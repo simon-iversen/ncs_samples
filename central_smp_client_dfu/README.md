@@ -40,7 +40,7 @@ index 09c3aa4..ece1466 100644
  
  1. Program this sample (central_smp_client_dfu) to nRF52840DK_client
  2. Open J-Link Commander, connect to nRF52840DK_client (Use SWD and 4000 kHz)
- 3. Run the following command: <location where this sample is placed>\central_smp_client_dfu\app_update.bin 0x50000
+ 3. Run the following command: loadbin <location where this sample is placed>\central_smp_client_dfu\app_update.bin 0x50000
  4. Build and program the sample _\zephyr\samples\subsys\mgmt\mcumgr\smp_svr_ to nRF52840DK_server with the Kconfig fragment _\smp_svr\overlay-bt.conf_ applied
  5. Reset both of the chips and open two serial terminal to se the logs. Make sure you see "connected" from both of the 52840's. You may get an error about failed security, but it doesn't matter
  6. Press button 1 on nRF52840DK_client, to run the image list command, you should see something like this:
